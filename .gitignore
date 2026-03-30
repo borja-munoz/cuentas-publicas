@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+*.egg-info/
+dist/
+build/
+
+# uv
+.python-version
+
+# DuckDB
+*.duckdb
+*.duckdb.wal
+
+# Node
+node_modules/
+web/dist/
+
+# OS
+.DS_Store

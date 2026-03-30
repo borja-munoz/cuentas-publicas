@@ -1,0 +1,26 @@
+[project]
+name = "scraper"
+version = "0.1.0"
+description = "Pipeline de datos para cuentas-publicas: descarga y normaliza presupuestos españoles en DuckDB"
+readme = "README.md"
+authors = [
+    { name = "Borja Muñoz", email = "borja.munoz@gmail.com" }
+]
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "requests>=2.32",
+    "pandas>=2.2",
+    "openpyxl>=3.1",
+    "xlrd>=2.0.1",
+    "duckdb==1.4.0",
+    "tqdm>=4.66",
+    "rich>=13.7",
+    "click>=8.1",
+]
+
+[project.scripts]
+scraper = "scraper.main:cli"
+
+[build-system]
+requires = ["uv_build>=0.10.12,<0.11.0"]
+build-backend = "uv_build"
