@@ -50,8 +50,8 @@ cp ../cuentas-publicas.duckdb ../web/public/db/
 | SEPG series históricas | `scrapers/sepg.py` | `gastos_plan`, `ingresos_plan` (entidad=Estado) | 2005–2025 | Millones de € |
 | IGAE ejecución presupuestaria | `scrapers/igae.py` | `gastos_ejecucion`, `ingresos_ejecucion` | 2015–2024 | Miles de € |
 | SEPG Seguridad Social | `scrapers/seguridad_social.py` | `gastos_plan`, `ingresos_plan` (entidad=SS) | 2005–2025 | Millones de € |
-| Transferencias a CCAA | `scrapers/transferencias_ccaa.py` | `transferencias_ccaa` | 2005–2025 | Millones de € |
-| Presupuestos CCAA | `scrapers/ccaa.py` | `ccaa_gastos`, `ccaa_ingresos` | 2002–2024 | Millones de € |
+| Transferencias a CCAA | `scrapers/transferencias_ccaa.py` | `transferencias_ccaa` | 2002–2023 | Millones de € |
+| Presupuestos CCAA | `scrapers/ccaa.py` | `ccaa_gastos`, `ccaa_ingresos` | 2002–2023 | Miles de € |
 
 ## Estructura
 

@@ -14,9 +14,9 @@ Sitio web educativo e interactivo para explorar los presupuestos públicos de Es
 | Ingresos | Desglose por capítulo (impuestos, tasas, deuda...) | 2005–2025 |
 | Impuestos | Recaudación AEAT: IRPF, IVA, Sociedades, Especiales | 1995–2024 |
 | Gastos | Treemap por Ministerio/sección con drill-down a programas | 2005–2025 |
-| Comparativa | Plan aprobado vs ejecución real por sección | 2009–2024 |
-| Transferencias | Transferencias del Estado a cada CCAA (corrientes, capital, FCI, UE) | 2005–2025 |
-| CCAA | Presupuesto consolidado de cada Comunidad Autónoma | 2002–2024 |
+| Comparativa | Plan aprobado vs ejecución real por sección | 2015–2024 |
+| Transferencias | Transferencias corrientes y de capital a cada CCAA | 2002–2023 |
+| CCAA | Presupuesto consolidado de cada Comunidad Autónoma | 2002–2023 |
 
 **Fuentes oficiales:** AEAT, IGAE, SEPG (Ministerio de Hacienda), INE
 
@@ -145,8 +145,8 @@ cuentas-publicas/
 | Recaudación tributaria | AEAT | [sede.agenciatributaria.gob.es](https://sede.agenciatributaria.gob.es) |
 | Ejecución presupuestaria | IGAE | [igae.pap.hacienda.gob.es](https://www.igae.pap.hacienda.gob.es) |
 | Plan PGE — Series históricas | SEPG | [sepg.pap.hacienda.gob.es](https://www.sepg.pap.hacienda.gob.es) |
-| Presupuesto Seguridad Social | TGSS | [datos.gob.es](https://datos.gob.es) |
-| Presupuestos CCAA | Mº Hacienda / IGAE | [igae.pap.hacienda.gob.es](https://www.igae.pap.hacienda.gob.es) |
+| Presupuesto Seguridad Social | SEPG | [sepg.pap.hacienda.gob.es](https://www.sepg.pap.hacienda.gob.es) |
+| Presupuestos CCAA | Mº Hacienda SGCIEF | [serviciostelematicosext.hacienda.gob.es](https://serviciostelematicosext.hacienda.gob.es/SGCIEF/PublicacionLiquidaciones) |
 | Población por CCAA | INE | [ine.es](https://www.ine.es) |
 
 Todos los datos son públicos y de acceso libre. El scraper los descarga directamente de los portales oficiales sin necesidad de credenciales.

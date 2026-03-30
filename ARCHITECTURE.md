@@ -46,8 +46,7 @@ cuentas-publicas/
 │       └── transform/
 │           ├── aeat.py                   # Normalización datos AEAT
 │           ├── igae.py                   # Normalización datos IGAE
-│           ├── sepg.py                   # Normalización datos SEPG
-│           └── ccaa.py                   # Normalización datos CCAA (códigos canónicos)
+│           └── sepg.py                   # Normalización datos SEPG (Estado + SS)
 │
 ├── web/                                  # Frontend React
 │   ├── package.json
@@ -126,20 +125,20 @@ cuentas-publicas/
 | Fuente | Organismo | Formato | Años | Granularidad |
 |--------|-----------|---------|------|--------------|
 | Anuario Estadístico Tributario | AEAT | Excel/CSV | 1995–2024 | Anual/mensual, por tipo de impuesto |
-| Ejecución Presupuestaria | IGAE | Excel (ZIP) | 2009–2024 | Anual, clasificación económica + orgánica |
+| Ejecución Presupuestaria | IGAE | Excel | 2015–2024 | Anual, clasificación económica (extracto diciembre) |
 | Plan PGE — Series Históricas | SEPG | Excel | 2005–2025 | Anual, por capítulo/sección/programa |
-| Presupuesto Seguridad Social | TGSS / datos.gob.es | Excel/CSV | 2010–2024 | Anual, por capítulo |
-| Transferencias a CCAA | SEPG (derivado del PGE) | Derivado | 2005–2025 | Por CCAA, capítulo 4 y 7, FCI, fondos UE |
-| Presupuestos CCAA (consolidado) | Ministerio de Hacienda / IGAE | Excel | 2002–2024 | Por CCAA, capítulo, plan y ejecución |
+| Presupuesto Seguridad Social | SEPG | Excel | 2005–2025 | Anual, por capítulo |
+| Transferencias a CCAA | Mº Hacienda SGCIEF (derivado) | Derivado | 2002–2023 | Por CCAA, caps. 4 (corriente) y 7 (capital) |
+| Presupuestos CCAA (consolidado) | Mº Hacienda SGCIEF | Excel | 2002–2023 | Por CCAA, capítulo, plan y ejecución |
 | Población por CCAA | INE | CSV / API | 2002–2024 | Padrón municipal anual por CCAA |
 
 **Estrategia de descarga:**
 - **AEAT**: descarga directa de ficheros Excel por año desde el anuario estadístico de la sede electrónica
-- **IGAE**: archivos ZIP por año desde el portal de ejecución presupuestaria; extracción y parseo de Excel internos
-- **SEPG**: ficheros de series históricas consolidadas (un Excel con todos los años) desde el portal de estadísticas
-- **Seguridad Social**: datasets de datos.gob.es (API CKAN) o descarga directa desde TGSS
-- **Transferencias a CCAA**: se derivan del PGE filtrando artículos 46 (cap. 4, transf. corrientes a CCAA) y 76 (cap. 7, transf. capital a CCAA) en `gastos_plan`/`gastos_ejecucion`. El FCI y los fondos UE se identifican por código de programa presupuestario. Los resultados se materializan en una tabla propia para que el mapa coroplético pueda consultarlos eficientemente.
-- **Presupuestos CCAA**: el Ministerio de Hacienda/IGAE publica "Ejecución del Presupuesto de las Comunidades Autónomas" con datos consolidados de todas las CCAA en series históricas. Un único scraper descarga y parsea todos los años.
+- **IGAE**: ficheros "extracto diciembre" individuales por año (Excel con dos bloques de columnas año/año-anterior); cobertura 2015–2024 (2009–2014 solo en PDF)
+- **SEPG**: un Excel por año (`02 Presupuesto del Estado.xlsx`, `03 Presupuesto de la Seguridad Social.xlsx`) desde el portal de estadísticas; formato wide (capítulos en filas, años en columnas)
+- **Seguridad Social**: mismo portal y estructura SEPG; hoja "31" gastos, "32" ingresos
+- **Transferencias a CCAA**: el desglose por CCAA de los artículos 46/76 no está disponible como fichero estático. Se derivan de `ccaa_ingresos`: capítulo 4 (corriente) y 7 (capital) de los presupuestos liquidados de cada CCAA. Los resultados se materializan en `transferencias_ccaa`.
+- **Presupuestos CCAA**: portal SGCIEF PublicacionLiquidaciones del Ministerio de Hacienda. Formulario ASP.NET que genera un Excel por CCAA×año con ingresos y gastos por capítulo (plan y ejecución). Cobertura 2002–2023.
 - **Población INE**: API JSON del INE (indicador de padrón municipal por CCAA) para calcular transferencias per cápita.
 
 ---
@@ -152,7 +151,7 @@ cuentas-publicas/
 -- Recaudación tributaria detallada (AEAT)
 CREATE TABLE recaudacion_aeat (
     year             INTEGER NOT NULL,
-    month            INTEGER,            -- NULL = total anual
+    month            INTEGER NOT NULL DEFAULT 0,  -- 0 = total anual; 1-12 = mes
     impuesto         VARCHAR NOT NULL,   -- 'IRPF', 'IVA', 'Sociedades', 'Especiales', 'Otros'
     importe_bruto    DECIMAL(18,2),
     devoluciones     DECIMAL(18,2),

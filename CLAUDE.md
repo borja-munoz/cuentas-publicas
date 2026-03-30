@@ -17,7 +17,7 @@ Full design: [ARCHITECTURE.md](ARCHITECTURE.md) — Implementation plan: [PLAN.m
 
 - Run with `uv run python -m scraper run` from `scraper/`
 - Output: `cuentas-publicas.duckdb` (copy to `web/public/db/` after build)
-- Each source has a `scrapers/<source>.py` (download) and `transform/<source>.py` (normalize)
+- Each source has a `scrapers/<source>.py` (download); transform modules exist for `aeat`, `igae`, `sepg` (shared by Estado + SS)
 - Schema and upsert helpers in `db.py`; CLI entry point in `main.py`
 
 ## Frontend (`web/`)
@@ -44,10 +44,10 @@ Full design: [ARCHITECTURE.md](ARCHITECTURE.md) — Implementation plan: [PLAN.m
 |-------|--------|-------|
 | `recaudacion_aeat` | AEAT Anuario Estadístico | 1995–2024 |
 | `ingresos_plan` / `gastos_plan` | SEPG series históricas | 2005–2025 |
-| `ingresos_ejecucion` / `gastos_ejecucion` | IGAE ejecución presupuestaria | 2009–2024 |
-| `transferencias_ccaa` | Derived from PGE (arts. 46/76) | 2005–2025 |
-| `ccaa_ingresos` / `ccaa_gastos` | Ministerio de Hacienda / IGAE | 2002–2024 |
-| `poblacion_ccaa` | INE Padrón Municipal | 2002–2024 |
+| `ingresos_ejecucion` / `gastos_ejecucion` | IGAE ejecución presupuestaria | 2015–2024 |
+| `transferencias_ccaa` | Derived from `ccaa_ingresos` caps 4+7 (SGCIEF) | 2002–2023 |
+| `ccaa_ingresos` / `ccaa_gastos` | Ministerio de Hacienda SGCIEF | 2002–2023 |
+| `poblacion_ccaa` | INE Padrón Municipal | not yet loaded |
 
 ## Deployment
 

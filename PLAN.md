@@ -26,37 +26,35 @@ Fase 2 ──► Fase 3 ──► Fase 4
 
 **Objetivo:** Generar el fichero `cuentas-publicas.duckdb` con datos reales de todas las fuentes oficiales.
 
-### Milestone 1.1 — Estructura del proyecto scraper
+### Milestone 1.1 — Estructura del proyecto scraper ✅
 
-- [ ] Inicializar proyecto con `uv init scraper` (Python 3.12+)
-- [ ] Definir dependencias en `pyproject.toml`:
+- [x] Inicializar proyecto con `uv init scraper` (Python 3.12+)
+- [x] Definir dependencias en `pyproject.toml`:
   - `requests` — descargas HTTP
   - `pandas` — manipulación de datos
   - `openpyxl` — lectura de ficheros Excel (.xlsx)
   - `duckdb` — escritura en base de datos
-  - `tqdm` — barras de progreso
   - `rich` — logging estructurado en consola
   - `click` — CLI
-- [ ] Crear estructura de directorios: `src/scraper/scrapers/`, `src/scraper/transform/`
-- [ ] Implementar `db.py`:
+  - `xlrd` — lectura de ficheros .xls antiguos (IGAE 2015)
+- [x] Crear estructura de directorios: `src/scraper/scrapers/`, `src/scraper/transform/`
+- [x] Implementar `db.py`:
   - `create_schema(conn)`: crea todas las tablas y vistas (idempotente con `IF NOT EXISTS`)
-  - `upsert(conn, table, df)`: helper genérico de upsert con `INSERT OR REPLACE`
+  - `upsert(conn, table, df, delete_where)`: helper con patrón DELETE+INSERT
 
 **Criterio de aceptación:** `python -m scraper --help` muestra el menú de comandos.
 
 ---
 
-### Milestone 1.2 — Scraper AEAT (recaudación tributaria 1995–2024)
+### Milestone 1.2 — Scraper AEAT (recaudación tributaria 1995–2024) ✅
 
-- [ ] Identificar y documentar URLs de descarga del Anuario Estadístico AEAT (sede electrónica)
-- [ ] Implementar `scrapers/aeat.py`:
-  - Descarga de ficheros Excel por año (1995–2024)
-  - Soporte de descarga incremental (saltar años ya existentes en DB)
-- [ ] Implementar `transform/aeat.py`:
-  - Normalizar nombres de columnas
+- [x] Identificar y documentar URLs de descarga del Anuario Estadístico AEAT (sede electrónica)
+- [x] Implementar `scrapers/aeat.py`:
+  - Ficheros IART individuales por año (2017–2024); serie histórica 1995–2016 en hoja "1.6" del último IART
+- [x] Implementar `transform/aeat.py`:
   - Mapear etiquetas de impuestos a valores canónicos: `'IRPF'`, `'IVA'`, `'Sociedades'`, `'Especiales'`, `'Otros'`
-  - Separar importe bruto, devoluciones e importe neto
-- [ ] Escribir en tabla `recaudacion_aeat` con upsert
+  - `month = 0` como sentinel de total anual (NULL no permitido en PK DuckDB)
+- [x] Escribir en tabla `recaudacion_aeat` con upsert (206 filas, 1995–2024)
 
 **Verificación:**
 ```sql
@@ -69,19 +67,16 @@ LIMIT 30;
 
 ---
 
-### Milestone 1.3 — Scraper SEPG (plan presupuestario 2005–2025)
+### Milestone 1.3 — Scraper SEPG (plan presupuestario 2005–2025) ✅
 
-- [ ] Identificar URLs de series históricas consolidadas SEPG:
-  - Fichero de ingresos consolidados (histórico)
-  - Fichero de gastos por sección y programa (histórico)
-- [ ] Implementar `scrapers/sepg.py`:
-  - Descarga y parseo de Excel multi-hoja
-  - Identificación automática de hojas relevantes por nombre
-- [ ] Implementar `transform/sepg.py`:
-  - Mapear clasificación económica (capítulos 1–9) a denominaciones estándar
-  - Extraer y normalizar códigos y nombres de secciones y programas
-  - Inferir campo `entidad` ('Estado', 'OO.AA.', 'Consolidado') a partir de la hoja o columna fuente
-- [ ] Escribir en tablas `ingresos_plan` y `gastos_plan`
+- [x] Identificar URLs de series históricas consolidadas SEPG:
+  - Un fichero `02 Presupuesto del Estado.xlsx` por año en la misma carpeta de estadísticas
+- [x] Implementar `scrapers/sepg.py`:
+  - Browser User-Agent requerido (servidor bloquea el UA de Python)
+  - Formato wide: capítulos en filas, años en columnas; hoja "21" gastos, "23" ingresos
+- [x] Implementar `transform/sepg.py`:
+  - `entidad = 'Estado'`; `normalize_gastos()` y `normalize_ingresos()`
+- [x] Escribir en tablas `ingresos_plan` y `gastos_plan` (171 + 160 filas, 2005–2025)
 
 **Verificación:**
 ```sql
@@ -95,19 +90,17 @@ ORDER BY year, entidad;
 
 ---
 
-### Milestone 1.4 — Scraper IGAE (ejecución presupuestaria 2009–2024)
+### Milestone 1.4 — Scraper IGAE (ejecución presupuestaria 2015–2024) ✅
 
-- [ ] Identificar y documentar URLs de archivos ZIP IGAE por año para:
-  - AGE (Administración General del Estado) — gastos e ingresos
-  - Organismos Autónomos — gastos e ingresos
-- [ ] Implementar `scrapers/igae.py`:
-  - Descarga ZIP por año, extracción en directorio temporal
-  - Parseo de cada Excel interno según clasificación (económica / orgánica)
-- [ ] Implementar `transform/igae.py`:
-  - Normalizar columnas de créditos, obligaciones y pagos
-  - Unir AGE y OO.AA. con campo `entidad`
-  - Alinear códigos de sección y programa con los de SEPG
-- [ ] Escribir en tablas `ingresos_ejecucion` y `gastos_ejecucion`
+- [x] Implementar `scrapers/igae.py`:
+  - Ficheros "extracto diciembre" individuales por año (datos anuales acumulados)
+  - 2009–2014 solo disponibles en PDF — cobertura real: 2015–2024
+  - Fichero 2015 en formato `.xls` (requiere `xlrd`)
+  - Dos bloques de columnas (año actual / año anterior) en el mismo Excel; escaneo acotado al bloque del año correcto
+  - Capítulos identificados por prefijo numérico en la etiqueta
+- [x] Implementar `transform/igae.py`:
+  - `entidad = 'Estado'`; columnas `creditos_iniciales/definitivos`, `obligaciones_reconocidas`, `pagos_ordenados`
+- [x] Escribir en tablas `ingresos_ejecucion` y `gastos_ejecucion` (90 + 80 filas, 2015–2024)
 
 **Verificación:**
 ```sql
@@ -122,14 +115,12 @@ GROUP BY year ORDER BY year;
 
 ---
 
-### Milestone 1.5 — Scraper Seguridad Social
+### Milestone 1.5 — Scraper Seguridad Social ✅
 
-- [ ] Localizar datasets de Seguridad Social en datos.gob.es o portal TGSS:
-  - Presupuesto de ingresos SS (plan)
-  - Presupuesto de gastos SS (plan)
-  - Ejecución presupuestaria SS (si disponible)
-- [ ] Implementar `scrapers/seguridad_social.py` con descarga y parseo
-- [ ] Integrar con tablas `ingresos_plan` y `gastos_plan` usando `entidad = 'SS'`
+- [x] Fuente: mismo portal SEPG, fichero `03 Presupuesto de la Seguridad Social.xlsx` en cada carpeta de año
+  - Misma estructura wide que Estado; hoja "31" gastos, "32" ingresos
+- [x] Implementar `scrapers/seguridad_social.py` con descarga y parseo
+- [x] Integrar con tablas `ingresos_plan` y `gastos_plan` usando `entidad = 'SS'` (160 + 160 filas, 2005–2025)
 
 **Verificación:**
 ```sql
@@ -140,36 +131,23 @@ WHERE entidad = 'SS' GROUP BY year ORDER BY year;
 
 ---
 
-### Milestone 1.6 — CLI, vistas y finalización del scraper
+### Milestone 1.6 — CLI, vistas y finalización del scraper ✅
 
-- [ ] Completar `main.py` con CLI `click`:
-  - `python -m scraper run` — ejecuta todos los scrapers
-  - `python -m scraper run --source aeat` — solo AEAT
-  - `python -m scraper run --year 2024` — solo el año indicado
-  - `python -m scraper status` — muestra recuento de filas por tabla
-- [ ] Crear vistas pre-calculadas en `db.py` (se ejecutan tras la carga completa):
-  - `v_gastos_plan_seccion`, `v_gastos_plan_capitulo`, `v_ingresos_plan_capitulo`
-- [ ] Logging estructurado con `rich`: fuente, año, filas insertadas/actualizadas
-- [ ] Documentar uso en `scraper/README.md`
-- [ ] Copiar `.duckdb` generado a `web/public/db/cuentas-publicas.duckdb`
+- [x] CLI `click` en `main.py`: `run`, `run --source`, `run --year`, `status`
+- [x] Vistas pre-calculadas en `db.py`: `v_gastos_plan_seccion`, `v_gastos_plan_capitulo`, `v_ingresos_plan_capitulo`, `v_transferencias_ccaa_total`, `v_ccaa_resumen`
+- [x] Logging estructurado con `rich`
+- [x] Documentado en `scraper/README.md`
 
 ---
 
-### Milestone 1.7 — Scraper transferencias Estado → CCAA
+### Milestone 1.7 — Transferencias Estado → CCAA ✅
 
-- [ ] Identificar en los datos SEPG los artículos que corresponden a transferencias territoriales:
-  - Artículo **46** (cap. 4): Transferencias corrientes a Comunidades Autónomas
-  - Artículo **76** (cap. 7): Transferencias de capital a Comunidades Autónomas
-  - Programas del **FCI** (Fondo de Compensación Interterritorial): identificar por código de programa
-  - Fondos **UE** canalizados a CCAA: identificar por sección y programa
-- [ ] Implementar `scrapers/transferencias_ccaa.py`:
-  - Reutiliza los datos ya cargados en `gastos_plan` y `gastos_ejecucion` (sin nuevas descargas)
-  - Filtra artículos 46 y 76 y desglosa por CCAA beneficiaria a nivel de concepto presupuestario
-  - Clasifica cada fila en `tipo`: `'corriente'`, `'capital'`, `'fci'`, `'ue'`
-- [ ] Incorporar tabla de población por CCAA (INE Padrón Municipal):
-  - Descarga desde API JSON del INE: indicador de padrón municipal por CCAA, serie 2002–2024
-  - Tabla `poblacion_ccaa (year, ccaa_cod, poblacion)`
-- [ ] Escribir en tabla `transferencias_ccaa` y crear vista `v_transferencias_ccaa_total`
+- [x] Implementar `scrapers/transferencias_ccaa.py`:
+  - El desglose por CCAA de artículos 46/76 no está disponible como fichero estático en SEPG
+  - Fuente real: `ccaa_ingresos` (caps. 4 corriente + 7 capital) del portal SGCIEF Liquidaciones
+  - Requiere que `ccaa` se ejecute primero; la fuente 'plan'='Presupuesto Inicial', 'ejecucion'='Derechos Reconocidos Netos'
+- [x] Escribir en tabla `transferencias_ccaa` (1.580 filas, 2002–2023)
+- [ ] **Pendiente (fase 2+):** Tabla `poblacion_ccaa` con datos INE Padrón Municipal (necesaria para vistas per cápita)
 
 **Verificación:**
 ```sql
@@ -181,18 +159,16 @@ GROUP BY year, ccaa_nom ORDER BY year, total DESC LIMIT 20;
 
 ---
 
-### Milestone 1.8 — Scraper presupuestos CCAA (Ministerio de Hacienda consolidado)
+### Milestone 1.8 — Scraper presupuestos CCAA (Ministerio de Hacienda consolidado) ✅
 
-- [ ] Localizar la publicación del Ministerio de Hacienda/IGAE: "Ejecución del Presupuesto de las Comunidades Autónomas" en el portal de Contabilidad de las CC.AA.
-- [ ] Identificar URLs de descarga de series históricas de todas las CCAA (2002–2024)
-- [ ] Implementar `scrapers/ccaa.py`:
-  - Descarga Excel o ZIP con datos de las 19 comunidades/ciudades autónomas
-  - Parseo de ingresos y gastos por capítulo para cada CCAA y año
-- [ ] Implementar `transform/ccaa.py`:
-  - Normalizar nombres de CCAA a tabla canónica de 19 códigos (17 CCAA + Ceuta + Melilla)
-  - Separar filas de plan (`fuente='plan'`) y ejecución (`fuente='ejecucion'`)
-  - Poblar tabla `ccaa_ref` con los 19 códigos, nombres y capitales
-- [ ] Escribir en tablas `ccaa_ingresos`, `ccaa_gastos` y crear vista `v_ccaa_resumen`
+- [x] Fuente: portal SGCIEF PublicacionLiquidaciones (`DescargaEconomicaDC.aspx?cdcdad={cod}&ano={year}`)
+  - Formulario ASP.NET; un fichero Excel por CCAA×año, con XML no estándar (col índice 0) reparado en el parseo
+  - Datos disponibles: 2002–2023 (19 CCAA)
+- [x] Implementar `scrapers/ccaa.py`:
+  - `fuente='plan'` ← Presupuesto Inicial; `fuente='ejecucion'` ← Derechos/Obligaciones Reconocidos Netos
+  - Normalización de ccaa_cod integrada en el scraper mediante `_CCAA_MAP`
+  - `ccaa_ref` poblada en `db.py` durante `create_schema()`
+- [x] Escribir en `ccaa_ingresos` y `ccaa_gastos` (7.110 + 7.092 filas, 2002–2023)
 
 **Verificación:**
 ```sql
