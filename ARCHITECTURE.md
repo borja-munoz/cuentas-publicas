@@ -12,13 +12,13 @@
 │    aeat.py        ──┐                    │      │    ├── Inicio         (dashboard KPIs)    │
 │    igae.py        ──┤                    │      │    ├── Ingresos       (por capítulo)       │
 │    sepg.py        ──┼──► db.py ──► .duckdb ───►│    │     └── Impuestos (detalle AEAT)     │
-│    ss.py          ──┤   (asset estático) │      │    ├── Gastos         (treemap drill-down) │
-│    transfer_ccaa.py─┤                    │      │    │     └── Programa (sección detalle)   │
-│    ccaa.py        ──┘                    │      │    ├── Comparativa    (plan vs ejecución)  │
-│                                          │      │    ├── Transferencias (mapa coroplético)   │
-│  GitHub Actions                          │      │    └── CCAA           (mapa + detalle)     │
-│    → cron mensual: scraper + commit      │      │                                           │
-│    → trigger: redeploy a GitHub Pages    │      │  DuckDB WASM (Web Worker)                 │
+│    ss.py          ──┤   (asset estático) │      │    ├── Gastos         (por capítulo)      │
+│    transfer_ccaa.py─┤                    │      │    ├── Comparativa    (plan vs ejecución)  │
+│    ccaa.py        ──┘                    │      │    ├── Transferencias (mapa — pendiente)   │
+│                                          │      │    └── CCAA           (mapa — pendiente)   │
+│  GitHub Actions                          │      │                                           │
+│    → cron mensual: scraper + commit      │      │  DuckDB WASM (Web Worker)                 │
+│    → trigger: redeploy a GitHub Pages    │      │                                           │
 └──────────────────────────────────────────┘      └───────────────────────────────────────────┘
 ```
 
@@ -34,15 +34,15 @@ cuentas-publicas/
 │   ├── uv.lock
 │   └── src/scraper/
 │       ├── __init__.py
-│       ├── main.py                       # CLI: `python -m scraper run [--year N] [--source X]`
+│       ├── main.py                       # CLI: `uv run python -m scraper run [--year N] [--source X]`
 │       ├── db.py                         # Schema DuckDB + helpers de escritura (upsert)
 │       ├── scrapers/
 │       │   ├── aeat.py                   # Recaudación AEAT (1995–2024)
-│       │   ├── igae.py                   # Ejecución presupuestaria IGAE (2009–2024)
+│       │   ├── igae.py                   # Ejecución presupuestaria IGAE (2015–2024)
 │       │   ├── sepg.py                   # Plan presupuestario SEPG (2005–2025)
-│       │   ├── seguridad_social.py       # Presupuesto Seguridad Social
-│       │   ├── transferencias_ccaa.py    # Extrae transferencias a CCAA del PGE (arts. 46/76)
-│       │   └── ccaa.py                   # Presupuestos CCAA (Mº Hacienda consolidado, 2002–2024)
+│       │   ├── seguridad_social.py       # Presupuesto Seguridad Social (2005–2025)
+│       │   ├── transferencias_ccaa.py    # Transferencias Estado → CCAA (derivadas de ccaa_ingresos)
+│       │   └── ccaa.py                   # Presupuestos CCAA (Mº Hacienda SGCIEF, 2002–2023)
 │       └── transform/
 │           ├── aeat.py                   # Normalización datos AEAT
 │           ├── igae.py                   # Normalización datos IGAE
@@ -50,72 +50,65 @@ cuentas-publicas/
 │
 ├── web/                                  # Frontend React
 │   ├── package.json
+│   ├── pnpm-lock.yaml
 │   ├── vite.config.ts
-│   ├── tailwind.config.ts
 │   ├── tsconfig.json
+│   ├── .nvmrc                            # Node 22
+│   ├── index.html                        # Meta tags SEO + coi-serviceworker
 │   ├── public/
 │   │   ├── coi-serviceworker.js          # Fix COOP/COEP para GitHub Pages (ver abajo)
-│   │   └── db/
-│   │       └── cuentas-publicas.duckdb   # Generado por el scraper, servido estáticamente
+│   │   ├── favicon.svg
+│   │   ├── db/
+│   │   │   └── cuentas-publicas.duckdb   # Generado por el scraper, servido estáticamente
+│   │   └── geo/
+│   │       └── ccaa.json                 # GeoJSON CCAA (para fase 5)
 │   └── src/
-│       ├── main.tsx                      # Monta App, registra service worker
+│       ├── main.tsx
 │       ├── App.tsx                       # Router + AppShell
 │       ├── utils/
-│       │   ├── format.ts                 # formatEur, formatPct, formatNum
-│       │   └── insights.ts              # Tipo Insight + helpers buildInsights por página
+│       │   ├── format.ts                 # formatEur (siempre M€), formatPct, formatNum
+│       │   └── insights.ts              # Interfaz Insight { label, value, trend, description }
 │       ├── db/
 │       │   ├── client.ts                 # Singleton DuckDB WASM (getDB, query<T>)
 │       │   └── queries/
-│       │       ├── ingresos.ts           # Queries de ingresos (plan + ejecución)
-│       │       ├── gastos.ts             # Queries de gastos (plan + ejecución)
-│       │       └── aeat.ts              # Queries de recaudación AEAT
+│       │       ├── ingresos.ts           # Queries ingresos + CAPITULO_INGRESOS_TOOLTIP
+│       │       ├── gastos.ts             # Queries gastos + CAPITULO_GASTOS_TOOLTIP
+│       │       └── aeat.ts              # Queries recaudación AEAT + IMPUESTO_COLORS
 │       ├── store/
-│       │   └── filters.ts               # Zustand: año seleccionado, entidad, viewMode
+│       │   └── filters.ts               # Zustand: selectedYear, entityType, viewMode
 │       ├── components/
 │       │   ├── layout/
-│       │   │   ├── AppShell.tsx          # Sidebar + header principal
-│       │   │   └── PageHeader.tsx        # Título de página + filtros globales
+│       │   │   ├── AppShell.tsx          # Sidebar + YearSelector + EntitySelector
+│       │   │   └── PageHeader.tsx        # Título + subtítulo de página
 │       │   ├── filters/
-│       │   │   ├── YearSelector.tsx      # Selector de año activo
-│       │   │   └── ViewModeToggle.tsx    # Plan / Ejecución / Comparativa
+│       │   │   ├── YearSelector.tsx
+│       │   │   └── ViewModeToggle.tsx    # Plan / Ejecución
 │       │   ├── charts/
-│       │   │   ├── BarChart.tsx          # Wrapper ECharts barras (simple + apiladas + agrupadas)
-│       │   │   ├── LineChart.tsx         # Wrapper ECharts líneas (series temporales)
-│       │   │   ├── TreemapChart.tsx      # Wrapper ECharts treemap con drill-down
-│       │   │   ├── SunburstChart.tsx     # Wrapper ECharts sunburst (jerarquía)
-│       │   │   └── ChoroplethMap.tsx     # Mapa SVG España coroplético (react-simple-maps + d3-scale)
+│       │   │   ├── BarChart.tsx          # ECharts barras (simple, apiladas, agrupadas, horizontal)
+│       │   │   └── LineChart.tsx         # ECharts líneas multi-serie (series temporales)
 │       │   └── ui/
-│       │       ├── KpiCard.tsx           # Tarjeta KPI con valor + variación YoY
-│       │       ├── LoadingSkeleton.tsx   # Placeholder animado durante carga WASM
+│       │       ├── KpiCard.tsx           # Tarjeta KPI (valor + variación ▲/▼, estilo Economist)
+│       │       ├── LoadingSkeleton.tsx   # Placeholder animado + ChartSkeleton
 │       │       ├── ErrorBoundary.tsx     # Mensaje si WASM no carga
 │       │       ├── ContextBox.tsx        # Texto estático de contexto educativo
-│       │       └── InsightsPanel.tsx     # Fila de destacados dinámicos (Insight[])
+│       │       ├── InsightsPanel.tsx     # Grid de destacados dinámicos (Insight[])
+│       │       └── InfoTooltip.tsx       # Botón "i" con popover explicativo (portal fixed)
 │       └── pages/
-│           ├── Inicio/index.tsx          # Dashboard: KPIs + barras ingresos vs gastos
+│           ├── Inicio/index.tsx          # Dashboard: KPIs saldo + líneas ingresos vs gastos
 │           ├── Ingresos/
-│           │   ├── index.tsx             # Barras apiladas por capítulo + tabla detalle
-│           │   └── Impuestos.tsx         # Líneas IRPF/IVA/Sociedades + sunburst
-│           ├── Gastos/
-│           │   ├── index.tsx             # Treemap secciones + ranking top 10
-│           │   └── Programa.tsx          # Drill-down: programas de una sección
-│           ├── Comparativa/index.tsx     # Barras plan vs ejecución + tabla desviación
-│           ├── Transferencias/index.tsx  # Mapa + tabla: transferencias Estado → CCAA
-│           └── CCAA/
-│               ├── index.tsx             # Mapa + tabla comparativa 17 CCAA
-│               └── Detalle.tsx           # Presupuesto de una CCAA (tabs ingresos/gastos/comparativa)
+│           │   ├── index.tsx             # Barras por capítulo + línea histórica + tabla
+│           │   └── Impuestos.tsx         # Líneas IRPF/IVA/Sociedades (1995–2024) + tabla
+│           ├── Gastos/index.tsx          # Barras por capítulo + líneas históricas + tabla
+│           └── Comparativa/index.tsx     # Barras plan vs ejecución + tabla desviación
 │
 ├── .github/
 │   └── workflows/
-│       ├── update-data.yml               # Cron mensual: scraper + commit .duckdb
-│       └── deploy.yml                    # Build web + push a gh-pages branch
-│
-├── web/public/geo/
-│   └── ccaa.json                         # GeoJSON boundaries 17 CCAA + Ceuta + Melilla (IGN)
+│       ├── deploy.yml                    # Build pnpm + deploy a GitHub Pages (API oficial)
+│       └── update-data.yml              # Cron 1º mes: scraper → commit .duckdb → redeploy
 │
 ├── ARCHITECTURE.md                       # Este fichero
 ├── PLAN.md                               # Hoja de ruta de implementación
-├── LICENSE
-└── README.md
+└── .gitignore                            # Excluye *.duckdb globalmente; incluye web/public/db/*.duckdb
 ```
 
 ---
@@ -124,22 +117,20 @@ cuentas-publicas/
 
 | Fuente | Organismo | Formato | Años | Granularidad |
 |--------|-----------|---------|------|--------------|
-| Anuario Estadístico Tributario | AEAT | Excel/CSV | 1995–2024 | Anual/mensual, por tipo de impuesto |
+| Anuario Estadístico Tributario | AEAT | Excel | 1995–2024 | Anual, por tipo de impuesto |
 | Ejecución Presupuestaria | IGAE | Excel | 2015–2024 | Anual, clasificación económica (extracto diciembre) |
-| Plan PGE — Series Históricas | SEPG | Excel | 2005–2025 | Anual, por capítulo/sección/programa |
+| Plan PGE — Series Históricas | SEPG | Excel | 2005–2025 | Anual, por capítulo |
 | Presupuesto Seguridad Social | SEPG | Excel | 2005–2025 | Anual, por capítulo |
-| Transferencias a CCAA | Mº Hacienda SGCIEF (derivado) | Derivado | 2002–2023 | Por CCAA, caps. 4 (corriente) y 7 (capital) |
+| Transferencias a CCAA | Mº Hacienda SGCIEF (derivado) | Derivado | 2002–2023 | Por CCAA, caps. 4 y 7 |
 | Presupuestos CCAA (consolidado) | Mº Hacienda SGCIEF | Excel | 2002–2023 | Por CCAA, capítulo, plan y ejecución |
-| Población por CCAA | INE | CSV / API | 2002–2024 | Padrón municipal anual por CCAA |
 
-**Estrategia de descarga:**
-- **AEAT**: descarga directa de ficheros Excel por año desde el anuario estadístico de la sede electrónica
-- **IGAE**: ficheros "extracto diciembre" individuales por año (Excel con dos bloques de columnas año/año-anterior); cobertura 2015–2024 (2009–2014 solo en PDF)
-- **SEPG**: un Excel por año (`02 Presupuesto del Estado.xlsx`, `03 Presupuesto de la Seguridad Social.xlsx`) desde el portal de estadísticas; formato wide (capítulos en filas, años en columnas)
-- **Seguridad Social**: mismo portal y estructura SEPG; hoja "31" gastos, "32" ingresos
-- **Transferencias a CCAA**: el desglose por CCAA de los artículos 46/76 no está disponible como fichero estático. Se derivan de `ccaa_ingresos`: capítulo 4 (corriente) y 7 (capital) de los presupuestos liquidados de cada CCAA. Los resultados se materializan en `transferencias_ccaa`.
-- **Presupuestos CCAA**: portal SGCIEF PublicacionLiquidaciones del Ministerio de Hacienda. Formulario ASP.NET que genera un Excel por CCAA×año con ingresos y gastos por capítulo (plan y ejecución). Cobertura 2002–2023.
-- **Población INE**: API JSON del INE (indicador de padrón municipal por CCAA) para calcular transferencias per cápita.
+**Notas de descarga:**
+- **AEAT**: ficheros IART por año (2017–2024); histórico 1995–2016 en hoja "1.6" del último IART. User-Agent estándar.
+- **IGAE**: ficheros "extracto diciembre" por año. 2015–2024 (2009–2014 solo en PDF). El fichero 2015 es `.xls` (requiere `xlrd`). Valores en **K€** — las queries dividen entre 1000 para convertir a M€.
+- **SEPG**: `02 Presupuesto del Estado.xlsx` y `03 Presupuesto de la Seguridad Social.xlsx` por carpeta de año. Browser User-Agent requerido. Formato wide (capítulos en filas, años en columnas). Cabeceras anotadas `"2013 (*)"` capturadas con regex específico.
+- **2020**: sin PGE aprobado (prórroga de 2018). Se inserta sintéticamente copiando datos de 2018 en `_insert_prorroga_2020()`.
+- **Transferencias CCAA**: el desglose por CCAA no está en ficheros SEPG. Se derivan de `ccaa_ingresos` (caps. 4 y 7 de los presupuestos liquidados de cada CCAA).
+- **Presupuestos CCAA**: portal SGCIEF, formulario ASP.NET. Un Excel por CCAA×año. Cobertura 2002–2023.
 
 ---
 
@@ -151,7 +142,7 @@ cuentas-publicas/
 -- Recaudación tributaria detallada (AEAT)
 CREATE TABLE recaudacion_aeat (
     year             INTEGER NOT NULL,
-    month            INTEGER NOT NULL DEFAULT 0,  -- 0 = total anual; 1-12 = mes
+    month            INTEGER NOT NULL DEFAULT 0,  -- 0 = total anual
     impuesto         VARCHAR NOT NULL,   -- 'IRPF', 'IVA', 'Sociedades', 'Especiales', 'Otros'
     importe_bruto    DECIMAL(18,2),
     devoluciones     DECIMAL(18,2),
@@ -162,15 +153,12 @@ CREATE TABLE recaudacion_aeat (
 -- Plan de ingresos (SEPG + SS)
 CREATE TABLE ingresos_plan (
     year         INTEGER NOT NULL,
-    entidad      VARCHAR NOT NULL,   -- 'Estado', 'OO.AA.', 'SS', 'Consolidado'
-    capitulo     INTEGER NOT NULL,   -- 1=Imp.directos  2=Imp.indirectos  3=Tasas y precios
-                                     -- 4=Transf.corrientes  5=Ingresos patrimoniales
-                                     -- 6=Enajenación activos reales  7=Transf.capital
-                                     -- 8=Activos financieros  9=Pasivos financieros
+    entidad      VARCHAR NOT NULL,   -- 'Estado', 'SS'
+    capitulo     INTEGER NOT NULL,
     articulo     INTEGER,
     concepto     INTEGER,
     descripcion  VARCHAR,
-    importe      DECIMAL(18,2),
+    importe      DECIMAL(18,2),      -- M€
     PRIMARY KEY (year, entidad, capitulo, COALESCE(articulo, -1), COALESCE(concepto, -1))
 );
 
@@ -191,17 +179,15 @@ CREATE TABLE ingresos_ejecucion (
 CREATE TABLE gastos_plan (
     year          INTEGER NOT NULL,
     entidad       VARCHAR NOT NULL,
-    seccion_cod   VARCHAR,           -- Código sección (Ministerio/Organismo)
+    seccion_cod   VARCHAR,
     seccion_nom   VARCHAR,
     programa_cod  VARCHAR,
     programa_nom  VARCHAR,
-    capitulo      INTEGER NOT NULL,  -- 1=Personal  2=Bienes corrientes  3=Gastos financieros
-                                     -- 4=Transf.corrientes  6=Inversiones reales
-                                     -- 7=Transf.capital  8=Activos fin.  9=Pasivos fin.
+    capitulo      INTEGER NOT NULL,
     articulo      INTEGER,
     concepto      INTEGER,
     descripcion   VARCHAR,
-    importe       DECIMAL(18,2),
+    importe       DECIMAL(18,2),      -- M€
     PRIMARY KEY (year, entidad, COALESCE(seccion_cod, ''), COALESCE(programa_cod, ''),
                  capitulo, COALESCE(articulo, -1), COALESCE(concepto, -1))
 );
@@ -220,33 +206,22 @@ CREATE TABLE gastos_ejecucion (
     descripcion                VARCHAR,
     creditos_iniciales         DECIMAL(18,2),
     creditos_definitivos       DECIMAL(18,2),
-    obligaciones_reconocidas   DECIMAL(18,2),
+    obligaciones_reconocidas   DECIMAL(18,2),  -- K€ (÷1000 en queries)
     pagos_ordenados            DECIMAL(18,2),
     PRIMARY KEY (year, entidad, COALESCE(seccion_cod, ''), COALESCE(programa_cod, ''),
                  capitulo, COALESCE(articulo, -1), COALESCE(concepto, -1))
 );
 ```
 
-### Tablas adicionales para CCAA
+### Tablas CCAA
 
 ```sql
--- Tabla de referencia de CCAA (estática, cargada una vez)
 CREATE TABLE ccaa_ref (
-    ccaa_cod  VARCHAR PRIMARY KEY,  -- 'AN','AR','AS','IB','CN','CB','CL','CM','CT',
-                                    -- 'VC','EX','GA','MD','MC','NC','PV','RI','CE','ME'
+    ccaa_cod  VARCHAR PRIMARY KEY,
     ccaa_nom  VARCHAR NOT NULL,
     capital   VARCHAR
 );
 
--- Población por CCAA y año (INE Padrón Municipal)
-CREATE TABLE poblacion_ccaa (
-    year      INTEGER NOT NULL,
-    ccaa_cod  VARCHAR NOT NULL,
-    poblacion INTEGER NOT NULL,
-    PRIMARY KEY (year, ccaa_cod)
-);
-
--- Transferencias del Estado a cada CCAA (materializadas desde gastos_plan/ejecucion)
 CREATE TABLE transferencias_ccaa (
     year      INTEGER NOT NULL,
     ccaa_cod  VARCHAR NOT NULL,
@@ -257,24 +232,22 @@ CREATE TABLE transferencias_ccaa (
     PRIMARY KEY (year, ccaa_cod, tipo, fuente)
 );
 
--- Presupuesto de ingresos de cada CCAA (Ministerio de Hacienda consolidado)
 CREATE TABLE ccaa_ingresos (
     year        INTEGER NOT NULL,
     ccaa_cod    VARCHAR NOT NULL,
     capitulo    INTEGER NOT NULL,
     descripcion VARCHAR,
-    fuente      VARCHAR NOT NULL,   -- 'plan' | 'ejecucion'
+    fuente      VARCHAR NOT NULL,
     importe     DECIMAL(18,2),
     PRIMARY KEY (year, ccaa_cod, capitulo, fuente)
 );
 
--- Presupuesto de gastos de cada CCAA (Ministerio de Hacienda consolidado)
 CREATE TABLE ccaa_gastos (
     year        INTEGER NOT NULL,
     ccaa_cod    VARCHAR NOT NULL,
     capitulo    INTEGER NOT NULL,
     descripcion VARCHAR,
-    fuente      VARCHAR NOT NULL,   -- 'plan' | 'ejecucion'
+    fuente      VARCHAR NOT NULL,
     importe     DECIMAL(18,2),
     PRIMARY KEY (year, ccaa_cod, capitulo, fuente)
 );
@@ -282,38 +255,28 @@ CREATE TABLE ccaa_gastos (
 
 ### Vistas pre-calculadas
 
-Se materializan en el `.duckdb` tras la carga para acelerar queries en el navegador:
-
 ```sql
--- Gastos plan agregados a nivel capítulo por sección
 CREATE VIEW v_gastos_plan_capitulo AS
 SELECT year, entidad, seccion_cod, seccion_nom, capitulo, SUM(importe) AS importe
-FROM gastos_plan WHERE articulo IS NULL
-GROUP BY ALL;
+FROM gastos_plan WHERE articulo IS NULL GROUP BY ALL;
 
--- Gastos plan agregados a nivel sección
 CREATE VIEW v_gastos_plan_seccion AS
 SELECT year, entidad, seccion_cod, seccion_nom, SUM(importe) AS importe
-FROM gastos_plan WHERE articulo IS NULL AND programa_cod IS NULL
-GROUP BY ALL;
+FROM gastos_plan WHERE articulo IS NULL AND programa_cod IS NULL GROUP BY ALL;
 
--- Ingresos plan agregados a nivel capítulo
 CREATE VIEW v_ingresos_plan_capitulo AS
 SELECT year, entidad, capitulo, descripcion, SUM(importe) AS importe
-FROM ingresos_plan WHERE articulo IS NULL
-GROUP BY ALL;
+FROM ingresos_plan WHERE articulo IS NULL GROUP BY ALL;
 
--- Totales de transferencias por CCAA y año (para el mapa coroplético)
 CREATE VIEW v_transferencias_ccaa_total AS
 SELECT year, ccaa_cod, ccaa_nom, fuente,
-       SUM(importe)                                               AS total,
-       SUM(CASE WHEN tipo='corriente' THEN importe ELSE 0 END)   AS corriente,
-       SUM(CASE WHEN tipo='capital'   THEN importe ELSE 0 END)   AS capital,
-       SUM(CASE WHEN tipo='fci'       THEN importe ELSE 0 END)   AS fci,
-       SUM(CASE WHEN tipo='ue'        THEN importe ELSE 0 END)   AS ue
+       SUM(importe)                                             AS total,
+       SUM(CASE WHEN tipo='corriente' THEN importe ELSE 0 END) AS corriente,
+       SUM(CASE WHEN tipo='capital'   THEN importe ELSE 0 END) AS capital,
+       SUM(CASE WHEN tipo='fci'       THEN importe ELSE 0 END) AS fci,
+       SUM(CASE WHEN tipo='ue'        THEN importe ELSE 0 END) AS ue
 FROM transferencias_ccaa GROUP BY ALL;
 
--- Resumen CCAA (ingresos + gastos plan y ejecución) por año, para el mapa de CCAA
 CREATE VIEW v_ccaa_resumen AS
 SELECT g.year, g.ccaa_cod, r.ccaa_nom,
        SUM(CASE WHEN g.fuente='plan'      THEN g.importe ELSE 0 END) AS gastos_plan,
@@ -335,262 +298,115 @@ GROUP BY ALL;
 | Preocupación | Librería | Versión |
 |---|---|---|
 | Framework | React + TypeScript | 18 / 5 |
-| Build tool | Vite | 5 |
-| CSS | Tailwind CSS | v4 |
+| Build tool | Vite | 8 |
+| Gestor de paquetes | pnpm | latest |
+| Node | — | 22 (`.nvmrc`) |
+| CSS | Tailwind CSS | v4 (plugin Vite) |
 | Gráficas | Apache ECharts + echarts-for-react | 5 |
 | DB cliente | @duckdb/duckdb-wasm | latest |
 | Estado global | Zustand | 4 |
 | Routing | React Router | v6 |
-| Tablas | TanStack Table | v8 |
-| Mapa coroplético | react-simple-maps | 3 |
-| Escala de color mapa | d3-scale + d3-color | 3 |
-| GeoJSON CCAA | Fichero estático `public/geo/ccaa.json` | — |
-| Headers fix | coi-serviceworker | latest |
+| Mapa coroplético (fase 5) | react-simple-maps + d3-scale + d3-scale-chromatic | 3 |
+| Headers fix | coi-serviceworker | — |
 
 ---
 
-## Cliente DuckDB WASM
+## Convenciones del Frontend
 
-El cliente es un **singleton** que inicializa DuckDB WASM una sola vez, descarga el fichero `.duckdb` del servidor y lo adjunta como base de datos de solo lectura.
+### Unidades monetarias
+
+Todos los valores se muestran siempre en **M€** (millones de euros). Nunca se usan "B€" (ambiguo: en español "billón" = 10¹²).
 
 ```typescript
-// src/db/client.ts
-import * as duckdb from '@duckdb/duckdb-wasm';
-
-let dbPromise: Promise<duckdb.AsyncDuckDB> | null = null;
-
-export function getDB(): Promise<duckdb.AsyncDuckDB> {
-  if (!dbPromise) dbPromise = initDB();
-  return dbPromise;
-}
-
-async function initDB(): Promise<duckdb.AsyncDuckDB> {
-  const bundles = duckdb.getJsDelivrBundles();
-  const bundle = await duckdb.selectBundle(bundles);
-  const worker = await duckdb.createWorker(bundle.mainWorker!);
-  const db = new duckdb.AsyncDuckDB(new duckdb.ConsoleLogger(), worker);
-  await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
-  const res = await fetch(import.meta.env.BASE_URL + 'db/cuentas-publicas.duckdb');
-  await db.registerFileBuffer('cp.duckdb', new Uint8Array(await res.arrayBuffer()));
-  const conn = await db.connect();
-  await conn.query("ATTACH 'cp.duckdb' AS cp (READ_ONLY)");
-  await conn.close();
-  return db;
-}
-
-export async function query<T = Record<string, unknown>>(sql: string): Promise<T[]> {
-  const db = await getDB();
-  const conn = await db.connect();
-  const result = await conn.query(sql);
-  await conn.close();
-  return result.toArray().map(r => r.toJSON()) as T[];
-}
+// src/utils/format.ts
+formatEur(9495)   // → "9.495 M€"
+formatEur(189005) // → "189.005 M€"
+formatPct(0.045)  // → "+4,5%"
+formatPct(0.0005) // → null  (suprime cambios triviales < 0,1%)
 ```
+
+### Bug DuckDB WASM — DECIMAL(18,2)
+
+`toJSON()` serializa `DECIMAL(18,2)` como entero × 100 (sin punto decimal). **Fix aplicado en todas las queries:** `CAST(SUM(importe) AS DOUBLE)`.
+
+### Unidades en `gastos_ejecucion`
+
+Los valores de `obligaciones_reconocidas` en `gastos_ejecucion` están en **K€**. Las queries dividen entre 1000: `SUM(obligaciones_reconocidas) / 1000.0`.
+
+### InfoTooltip
+
+Renderiza mediante `createPortal` en `document.body` con `position: fixed`, evitando recorte por `overflow: hidden/auto` de la tabla. La posición (arriba/abajo del botón) se calcula con `getBoundingClientRect()` en el momento de mostrar.
 
 ---
 
-## Estado Global (Zustand)
+## Capa Educativa
+
+Cada página implementa dos zonas de texto:
+
+### `ContextBox` — Texto estático
+Explica qué muestra la página y cómo leer los datos. Se escribe como JSX directamente en el archivo de la página.
+
+### `InsightsPanel` — Destacados dinámicos
+Grid de 3 columnas con tarjetas que muestran un valor numérico calculado, indicador de tendencia ▲/▼ y descripción narrativa. Los insights se calculan en el propio componente de página a partir de los datos ya cargados (sin llamadas adicionales a la DB).
 
 ```typescript
-// src/store/filters.ts
-interface FiltersState {
-  years: number[];                             // Años disponibles (cargados de DB al inicio)
-  selectedYear: number;                        // Año activo para vistas de un año
-  compareYears: [number, number] | null;       // Para página Comparativa
-  viewMode: 'plan' | 'ejecucion' | 'comparativa';
-  entityType: 'consolidado' | 'estado' | 'ooaa' | 'ss';
-  setSelectedYear: (y: number) => void;
-  setCompareYears: (years: [number, number]) => void;
-  setViewMode: (m: FiltersState['viewMode']) => void;
-  setEntityType: (e: FiltersState['entityType']) => void;
-  initYears: (ys: number[]) => void;
-}
-```
-
----
-
-## Navegación y Páginas
-
-| Ruta | Página | Visualizaciones principales |
-|------|--------|-----------------------------|
-| `/` | Inicio | KPI cards + barras agrupadas ingresos vs gastos (histórico) |
-| `/ingresos` | Ingresos | Barras apiladas por capítulo + tabla TanStack |
-| `/ingresos/impuestos` | Impuestos (AEAT) | Líneas IRPF/IVA/Sociedades (1995–2024) + sunburst año actual |
-| `/gastos` | Gastos | Treemap secciones con drill-down + ranking top 10 |
-| `/gastos/:seccion` | Detalle sección | Tabla programas + barras horizontales por programa |
-| `/comparativa` | Comparativa | Barras plan vs ejecución + tabla desviación ordenable |
-| `/transferencias` | Transferencias | Mapa coroplético CCAA + tabla vinculada + serie histórica |
-| `/ccaa` | CCAA (overview) | Mapa coroplético + tabla comparativa 17 CCAA |
-| `/ccaa/:id` | CCAA (detalle) | KPIs + tabs Ingresos / Gastos / Comparativa para una CCAA |
-
----
-
-## Capa Educativa — Texto Explicativo por Página
-
-Cada página tiene **dos zonas de texto** que se muestran junto a las visualizaciones:
-
-### 1. `ContextBox` — Texto estático de contexto
-
-Explica *qué* muestra la página y *cómo* leer los datos. Se escribe una vez y se mantiene manualmente. Contenido típico:
-
-- Definición del concepto (qué es el IRPF, qué es un capítulo presupuestario, etc.)
-- Qué clasificación se usa y por qué (orgánica, económica, funcional)
-- Fuente de los datos y años disponibles
-- Cómo interpretar el gráfico principal
-
-**Implementación:** Componente `ContextBox.tsx` que acepta `children` (JSX). El texto de cada página se escribe directamente en el archivo de la página como JSX, sin CMS ni ficheros de texto externos.
-
-```tsx
-// Ejemplo en pages/Ingresos/Impuestos.tsx
-<ContextBox title="¿Qué muestran estos datos?">
-  <p>
-    La <strong>Agencia Tributaria (AEAT)</strong> publica anualmente la recaudación
-    real de cada figura tributaria. Los datos reflejan lo efectivamente cobrado
-    (recaudación neta = ingresos brutos − devoluciones), no lo presupuestado.
-  </p>
-  <p>
-    El <strong>IRPF</strong> (Impuesto sobre la Renta de las Personas Físicas) es el
-    principal impuesto directo y grava las rentas del trabajo, el capital y las
-    actividades económicas. Datos disponibles desde <strong>1995</strong>.
-  </p>
-</ContextBox>
-```
-
----
-
-### 2. `InsightsPanel` — Destacados dinámicos generados desde los datos
-
-Muestra entre 3 y 5 "insights" clave calculados a partir de los resultados de las queries, actualizándose al cambiar el año o la entidad seleccionados. **No usa IA** — son plantillas con interpolación de valores reales.
-
-**Implementación:** Función `buildInsights(data, year): Insight[]` co-ubicada con cada página. Devuelve un array de objetos `{ label, value, trend, description }` que `InsightsPanel.tsx` renderiza.
-
-```typescript
-// src/utils/insights.ts — tipos compartidos
+// src/utils/insights.ts
 export interface Insight {
-  label: string;          // "Recaudación IRPF"
-  value: string;          // "109.163 M€"
-  trend?: 'up' | 'down' | 'neutral';
-  trendValue?: string;    // "+8,3% vs 2022"
-  description: string;    // "El IRPF supone el 42% de la recaudación total..."
+  label: string        // "Peso transf. corrientes (cap. 4)"
+  value: string        // "58,3%"
+  trend?: 'up' | 'down' | 'neutral'
+  trendValue?: string  // "+2,1 pp vs 2022"
+  description: string  // texto explicativo de 1–2 frases
 }
 ```
 
-```tsx
-// src/components/ui/InsightsPanel.tsx
-interface InsightsPanelProps {
-  insights: Insight[];
-  isLoading?: boolean;
-}
-// Renderiza una fila horizontal de tarjetas con icono de tendencia (▲/▼)
-// En móvil colapsa a lista vertical
-```
+**Insights implementados por página:**
 
-**Ejemplos de insights por página:**
+| Página | Insights |
+|--------|---------|
+| Inicio | Saldo del año · Años en déficit de la serie · Mayor déficit histórico |
+| Ingresos | Peso impuestos (cap 1+2) · Mayor fuente · Dependencia de deuda (cap 9) |
+| Gastos | Peso transferencias corrientes (cap 4) · Variación YoY · Gasto en personal |
+| Impuestos (AEAT) | Variación recaudación YoY · Ratio devoluciones IVA · Máximo histórico |
+| Comparativa | Tasa de ejecución global · Crédito no ejecutado · Capítulo menos ejecutado |
 
-| Página | Ejemplo de insight generado |
-|--------|-----------------------------|
-| Inicio | "El déficit de 2023 fue −50.200 M€, el menor desde 2007" |
-| Ingresos | "Los impuestos directos representan el 48% de los ingresos totales en 2023" |
-| Impuestos (AEAT) | "El IVA creció un +12,4% en 2022 debido a la recuperación del consumo post-COVID" |
-| Gastos | "Sanidad y Protección Social absorben el 61% del gasto consolidado en 2023" |
-| Comparativa | "El Ministerio de Defensa ejecutó el 94,2% de su presupuesto, la tasa más alta entre las secciones principales" |
-| Transferencias | "Andalucía recibió 12.450 M€ en transferencias corrientes en 2023, un 18% del total nacional" |
-| CCAA Detalle | "El gasto per cápita de Madrid (4.823 €/hab) es un 15% inferior a la media autonómica" |
-
----
-
-### Layout de página estándar
-
-Todas las páginas siguen este orden vertical:
+### Layout estándar de página
 
 ```
-┌─────────────────────────────────────────────────┐
-│  PageHeader (título + filtros globales)          │
-├─────────────────────────────────────────────────┤
-│  ContextBox (texto estático: qué son estos datos)│
-├─────────────────────────────────────────────────┤
-│  InsightsPanel (3–5 destacados dinámicos)        │
-├─────────────────────────────────────────────────┤
-│  Visualización principal (gráfico / mapa)        │
-├─────────────────────────────────────────────────┤
-│  Tabla detalle (TanStack Table, si aplica)       │
-├─────────────────────────────────────────────────┤
-│  Nota de fuente y metodología (pie de página)    │
-└─────────────────────────────────────────────────┘
+PageHeader → ContextBox → InsightsPanel → KpiCards → Gráfico → Tabla → Nota de fuente
 ```
-
----
-
-## Mapa Coroplético (react-simple-maps)
-
-**Biblioteca elegida: react-simple-maps + d3-scale** (en lugar de deck.gl)
-
-| Criterio | react-simple-maps (SVG) | deck.gl (WebGL) |
-|---|---|---|
-| Bundle size | ~50 KB | ~1.5 MB |
-| Renderer | SVG / DOM — coherente con el resto de la app | WebGL — segunda capa de GPU |
-| Choropléticos | ✅ Totalmente soportados con d3-scale | ✅ |
-| Tooltip / click React | ✅ Nativo con `onMouseEnter`/`onClick` | Requiere callbacks WebGL |
-| Soporte móvil | ✅ SVG se escala sin configuración | Requiere polyfills |
-| 3D / tiles satélite | ✗ No necesario en este proyecto | ✅ (pero no se necesita aquí) |
-
-**GeoJSON:** `web/public/geo/ccaa.json` — 17 CCAA + Ceuta + Melilla. Fuente: IGN (Instituto Geográfico Nacional). Las Islas Canarias se reposicionan en un recuadro mediante una transformación de coordenadas en el GeoJSON (técnica habitual en mapas de España).
-
-**Componente `ChoroplethMap.tsx` (genérico, reutilizable):**
-
-```typescript
-import { ComposableMap, Geographies, Geography } from 'react-simple-maps';
-import { scaleSequential } from 'd3-scale';
-import { interpolateBlues } from 'd3-scale-chromatic';
-
-interface ChoroplethMapProps {
-  data: Record<string, number>;          // ccaa_cod → valor numérico
-  domain: [number, number];              // [min, max] del rango de valores
-  onSelect: (ccaaCod: string) => void;
-  selectedCcaa: string | null;
-  tooltipFormatter?: (val: number) => string;
-}
-
-// Uso interno:
-// const colorScale = scaleSequential(interpolateBlues).domain(domain);
-// fill={colorScale(data[geo.properties.ccaa_cod] ?? 0)}
-```
-
-**Variables del coroplético** (selector en cada página):
-- **Transferencias:** Total €, Per cápita (€/hab), Solo corrientes, Solo capital, FCI, Fondos UE
-- **CCAA:** Gasto total, Ingreso total, Déficit/superávit, % ejecución presupuestaria
 
 ---
 
 ## GitHub Pages: Solución COOP/COEP
 
-DuckDB WASM requiere `SharedArrayBuffer` (worker multihilo), que el navegador solo permite con:
-
+DuckDB WASM requiere `SharedArrayBuffer`, que el navegador solo permite con:
 ```
 Cross-Origin-Opener-Policy: same-origin
 Cross-Origin-Embedder-Policy: require-corp
 ```
-
-GitHub Pages **no permite** configurar estas cabeceras HTTP. La solución estándar es [coi-serviceworker](https://github.com/gzuidhof/coi-serviceworker): un pequeño service worker que intercepta las respuestas y añade las cabeceras en el cliente. Es transparente para el usuario y solo recarga la página una vez tras el registro inicial.
-
-```html
-<!-- web/index.html — antes de cualquier otro script -->
-<script src="coi-serviceworker.js"></script>
-```
+GitHub Pages no permite configurar estas cabeceras. La solución es [coi-serviceworker](https://github.com/gzuidhof/coi-serviceworker): un service worker que intercepta las respuestas y añade las cabeceras en el cliente. Se registra antes de cualquier otro script en `index.html`.
 
 ---
 
 ## Pipeline CI/CD
 
 ```
-push a main
-    └──► deploy.yml
-             ├── cd web && npm ci && npm run build
-             └── peaceiris/actions-gh-pages → publica web/dist/ en rama gh-pages
+push a main  ──► deploy.yml
+                   ├── setup-node (v22) + pnpm
+                   ├── pnpm install --frozen-lockfile
+                   ├── pnpm build  →  web/dist/
+                   ├── upload-pages-artifact
+                   └── deploy-pages  →  GitHub Pages (API oficial)
 
-cron: 0 6 1 * *  (1º de cada mes)
+cron: 0 6 1 * *  (1º de cada mes, 06:00 UTC)
     └──► update-data.yml
+             ├── astral-sh/setup-uv (Python 3.12)
              ├── uv run python -m scraper run
-             ├── git commit web/public/db/cuentas-publicas.duckdb
+             ├── cp cuentas-publicas.duckdb web/public/db/
+             ├── git commit "chore: actualizar datos YYYY-MM"
+             ├── git push
              └── workflow_dispatch → deploy.yml
 ```
+
+**Nota:** `web/public/db/cuentas-publicas.duckdb` está excluido por `*.duckdb` en `.gitignore` pero re-incluido con `!web/public/db/cuentas-publicas.duckdb` para que el CI pueda hacer commit del fichero actualizado.

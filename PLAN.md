@@ -244,7 +244,7 @@ Fase 2 ──► Fase 3 ──► Fase 4
   - Node 22 (vía `.nvmrc`), pnpm latest, `pnpm install --frozen-lockfile && pnpm build`
   - Usa `actions/upload-pages-artifact` + `actions/deploy-pages` (API oficial de GitHub Pages)
   - Permisos: `pages: write`, `id-token: write`
-- [ ] **Pendiente:** Activar GitHub Pages en la configuración del repo (fuente: GitHub Actions)
+- [x] GitHub Pages activado en la configuración del repo (fuente: GitHub Actions)
 
 ---
 
