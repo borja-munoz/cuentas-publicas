@@ -262,8 +262,8 @@ Fase 2 ──► Fase 3 ──► Fase 4
 
 - [x] Meta tags SEO en `web/index.html`: `<meta description>`, Open Graph, Twitter Card, `<link rel="canonical">`
 - [x] `.gitignore`: regla `!web/public/db/cuentas-publicas.duckdb` para incluir el fichero del frontend pese a la exclusión global de `*.duckdb`
-- [ ] **Pendiente:** Diseño responsive (sidebar hamburguesa en móvil)
-- [ ] **Pendiente:** Pantalla de carga inicial mientras DuckDB WASM se inicializa
+- [x] Diseño responsive: sidebar ya implementada con hamburger + backdrop + slide-in en móvil
+- [x] Pantalla de carga inicial: `LoadingScreen` con tres puntos animados mientras DuckDB WASM inicializa y carga el `.duckdb`; se oculta cuando `DBInitializer` completa la primera query
 
 ---
 
