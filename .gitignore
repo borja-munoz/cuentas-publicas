@@ -11,9 +11,11 @@ build/
 # uv
 .python-version
 
-# DuckDB
+# DuckDB — excluir ficheros de trabajo locales
 *.duckdb
 *.duckdb.wal
+# Pero incluir el fichero de datos del frontend (gestionado por CI)
+!web/public/db/cuentas-publicas.duckdb
 
 # Node
 node_modules/

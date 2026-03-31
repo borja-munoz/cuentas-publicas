@@ -1,0 +1,46 @@
+name: Actualizar datos
+
+on:
+  schedule:
+    - cron: '0 6 1 * *'   # 1º de cada mes a las 6:00 UTC
+  workflow_dispatch:        # permite ejecución manual desde la pestaña Actions
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: '3.12'
+
+      - name: Ejecutar scraper
+        working-directory: scraper
+        run: uv run python -m scraper run
+
+      - name: Copiar .duckdb al frontend
+        run: cp scraper/cuentas-publicas.duckdb web/public/db/cuentas-publicas.duckdb
+
+      - name: Commit y push si hay cambios
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add web/public/db/cuentas-publicas.duckdb
+          git diff --staged --quiet || git commit -m "chore: actualizar datos $(date +%Y-%m)"
+          git push
+
+      - name: Disparar redeploy
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'deploy.yml',
+              ref: 'main',
+            })

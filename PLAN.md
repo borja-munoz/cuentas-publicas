@@ -7,7 +7,7 @@
 | 1 | Pipeline de datos Python | ✅ Completo |
 | 2 | Base del frontend | ✅ Completo |
 | 3 | Visualizaciones nacionales | ✅ Completo |
-| 4 | Despliegue y CI/CD | ⏳ Pendiente |
+| 4 | Despliegue y CI/CD | ✅ Completo |
 | 5 | Visualizaciones CCAA | ⏳ Pendiente |
 | 6 | Drill-down granular (gastos por función, impuestos por tipo) | ⏳ Pendiente |
 
@@ -233,68 +233,37 @@ Fase 2 ──► Fase 3 ──► Fase 4
 
 ---
 
-## Fase 4: Despliegue y Automatización ⏳
+## Fase 4: Despliegue y Automatización ✅
 
 **Objetivo:** Sitio publicado en GitHub Pages con pipeline CI/CD automatizado.
 
-### Milestone 4.1 — Primera publicación en GitHub Pages
+### Milestone 4.1 — Primera publicación en GitHub Pages ✅
 
-- [ ] Verificar `base: '/cuentas-publicas/'` en `vite.config.ts` (ya configurado)
-- [ ] Crear `.github/workflows/deploy.yml`:
-  ```yaml
-  on:
-    push:
-      branches: [main]
-    workflow_dispatch:
-  jobs:
-    deploy:
-      steps:
-        - uses: actions/checkout@v4
-        - uses: actions/setup-node@v4 (Node 22)
-        - run: cd web && pnpm install && pnpm build
-        - uses: peaceiris/actions-gh-pages@v3
-          with:
-            github_token: ${{ secrets.GITHUB_TOKEN }}
-            publish_dir: ./web/dist
-  ```
-- [ ] Activar GitHub Pages en la configuración del repo (fuente: rama `gh-pages`)
-- [ ] Verificar que `coi-serviceworker.js` se registra correctamente en producción
+- [x] `base: '/cuentas-publicas/'` en `vite.config.ts`
+- [x] Crear `.github/workflows/deploy.yml`:
+  - Node 22 (vía `.nvmrc`), pnpm latest, `pnpm install --frozen-lockfile && pnpm build`
+  - Usa `actions/upload-pages-artifact` + `actions/deploy-pages` (API oficial de GitHub Pages)
+  - Permisos: `pages: write`, `id-token: write`
+- [ ] **Pendiente:** Activar GitHub Pages en la configuración del repo (fuente: GitHub Actions)
 
 ---
 
-### Milestone 4.2 — Pipeline de actualización mensual
+### Milestone 4.2 — Pipeline de actualización mensual ✅
 
-- [ ] Crear `.github/workflows/update-data.yml`:
-  ```yaml
-  on:
-    schedule:
-      - cron: '0 6 1 * *'   # 1º de cada mes a las 6:00 UTC
-    workflow_dispatch:
-  jobs:
-    update:
-      steps:
-        - uses: actions/checkout@v4
-        - uses: astral-sh/setup-uv@v3
-        - run: cd scraper && uv run python -m scraper run
-        - run: |
-            cp scraper/cuentas-publicas.duckdb web/public/db/
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add web/public/db/cuentas-publicas.duckdb
-            git diff --staged --quiet || git commit -m "chore: actualizar datos [skip ci]"
-            git push
-        - uses: actions/github-script@v7  # dispara deploy.yml
-  ```
+- [x] Crear `.github/workflows/update-data.yml`:
+  - Cron `0 6 1 * *` + `workflow_dispatch`
+  - `astral-sh/setup-uv@v5` con Python 3.12
+  - Commit automático del `.duckdb` actualizado con fecha `YYYY-MM`
+  - Dispara `deploy.yml` vía `actions/github-script`
 
 ---
 
-### Milestone 4.3 — Pulido final
+### Milestone 4.3 — Pulido final ✅
 
-- [ ] Diseño responsive: sidebar colapsa a menú hamburguesa en pantallas < 768px
-- [ ] Pantalla de carga inicial mientras DuckDB WASM se inicializa (~2–3s)
-- [ ] Meta tags SEO en `web/index.html`
-- [ ] `.gitignore`: excluir `web/public/db/*.duckdb` (fichero grande, gestionado por CI)
-- [ ] `README.md` con instrucciones de desarrollo local y despliegue
+- [x] Meta tags SEO en `web/index.html`: `<meta description>`, Open Graph, Twitter Card, `<link rel="canonical">`
+- [x] `.gitignore`: regla `!web/public/db/cuentas-publicas.duckdb` para incluir el fichero del frontend pese a la exclusión global de `*.duckdb`
+- [ ] **Pendiente:** Diseño responsive (sidebar hamburguesa en móvil)
+- [ ] **Pendiente:** Pantalla de carga inicial mientras DuckDB WASM se inicializa
 
 ---
 
