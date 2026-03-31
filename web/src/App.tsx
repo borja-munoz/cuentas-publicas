@@ -7,6 +7,7 @@ import { useFilters } from './store/filters'
 
 import Inicio from './pages/Inicio'
 import Ingresos from './pages/Ingresos'
+import Impuestos from './pages/Ingresos/Impuestos'
 import Gastos from './pages/Gastos'
 import Comparativa from './pages/Comparativa'
 import Transferencias from './pages/Transferencias'
@@ -33,6 +34,7 @@ export default function App() {
           <Route element={<AppShell />}>
             <Route index element={<Inicio />} />
             <Route path="ingresos" element={<Ingresos />} />
+            <Route path="ingresos/impuestos" element={<Impuestos />} />
             <Route path="gastos" element={<Gastos />} />
             <Route path="comparativa" element={<Comparativa />} />
             <Route path="transferencias" element={<Transferencias />} />

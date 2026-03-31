@@ -34,7 +34,12 @@ _BASE_URL = (
 
 # (año_presupuesto, carpeta)
 # Los "-P" son proyectos de ley; si existe la versión aprobada, se usa esa.
+# 2013 se incluye explícitamente porque su fichero propio contiene datos de gastos
+# que no aparecen en el histórico de ficheros posteriores.
+# 2020 no tiene fichero SEPG (prórroga del presupuesto de 2018, sin PGE aprobado);
+# se trata sintéticamente en _insert_prorroga_2020().
 _YEAR_FOLDERS: list[tuple[int, str]] = [
+    (2013, "2013"),
     (2014, "2014"),
     (2015, "2015"),
     (2016, "2016"),
@@ -145,6 +150,8 @@ def _label_to_chapter(label: str, chapter_map: dict[str, int]) -> int | None:
 
 
 _YEAR_RE = re.compile(r"^(200[5-9]|20[12]\d)(-P)?$")
+# Captura también variantes anotadas como "2013 (*)", "2014 (**)", "2013-P (*)" etc.
+_YEAR_ANNOTATED_RE = re.compile(r"^(200[5-9]|20[12]\d)(-P)?\s*\(?\*+\)?")
 
 
 def _find_header_row(df: pd.DataFrame) -> tuple[int, dict[int, int]] | tuple[None, None]:
@@ -157,6 +164,13 @@ def _find_header_row(df: pd.DataFrame) -> tuple[int, dict[int, int]] | tuple[Non
             if _YEAR_RE.match(s):
                 y = int(s.split("-")[0])
                 draft = s.endswith("-P")
+                if y not in year_cols or (not draft and is_draft.get(y, True)):
+                    year_cols[y] = j
+                    is_draft[y] = draft
+            elif _YEAR_ANNOTATED_RE.match(s):
+                # Cabecera con anotación: "2013 (*)", "2014 (**)", etc.
+                y = int(s[:4])
+                draft = "-P" in s[:7]
                 if y not in year_cols or (not draft and is_draft.get(y, True)):
                     year_cols[y] = j
                     is_draft[y] = draft
@@ -243,6 +257,45 @@ def _parse_file(data: bytes) -> tuple[list[dict], list[dict]]:
     return gastos, ingresos
 
 
+def _insert_prorroga_2020(conn: duckdb.DuckDBPyConnection) -> None:
+    """
+    2020 no tiene PGE aprobado: se prorrogó el presupuesto de 2018.
+    Copia los datos de 2018 a 2020 en gastos_plan e ingresos_plan
+    (solo si 2018 existe y 2020 aún no tiene datos de Estado).
+    """
+    already = conn.execute(
+        "SELECT COUNT(*) FROM gastos_plan WHERE year=2020 AND entidad='Estado'"
+    ).fetchone()[0]
+    if already > 0:
+        return
+
+    has_2018 = conn.execute(
+        "SELECT COUNT(*) FROM gastos_plan WHERE year=2018 AND entidad='Estado'"
+    ).fetchone()[0]
+    if not has_2018:
+        console.print("  [yellow]Prorroga 2020: no hay datos de 2018, se omite.[/yellow]")
+        return
+
+    conn.execute("""
+        INSERT INTO gastos_plan
+        SELECT 2020, entidad, seccion_cod, seccion_nom, programa_cod, programa_nom,
+               capitulo, articulo, concepto, descripcion, importe
+        FROM gastos_plan
+        WHERE year = 2018 AND entidad = 'Estado'
+    """)
+    conn.execute("""
+        INSERT INTO ingresos_plan
+        SELECT 2020, entidad, capitulo, articulo, concepto, descripcion, importe
+        FROM ingresos_plan
+        WHERE year = 2018 AND entidad = 'Estado'
+          AND NOT EXISTS (
+              SELECT 1 FROM ingresos_plan
+              WHERE year = 2020 AND entidad = 'Estado'
+          )
+    """)
+    console.print("  → Prorroga 2020: datos de 2018 copiados a 2020 (Estado).")
+
+
 def run(conn: duckdb.DuckDBPyConnection, year: int | None = None) -> None:
     """Descarga y carga los presupuestos del Estado (SEPG)."""
     # Acumular por año; el fichero más tardío prevalece (mayor año_archivo → más actualizado)
@@ -309,3 +362,7 @@ def run(conn: duckdb.DuckDBPyConnection, year: int | None = None) -> None:
                 delete_where=f"entidad = 'Estado' AND year IN ({years_str})",
             )
             console.print(f"  → ingresos_plan: {n} filas.")
+
+    # Prórroga 2020 (presupuesto de 2018 extendido, sin PGE aprobado)
+    if year is None or year == 2020:
+        _insert_prorroga_2020(conn)

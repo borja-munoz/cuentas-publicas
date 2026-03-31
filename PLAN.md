@@ -2,13 +2,14 @@
 
 ## Resumen de Fases
 
-| Fase | Objetivo | Entregable |
-|------|----------|------------|
-| 1 | Pipeline de datos Python | `cuentas-publicas.duckdb` con datos reales de todas las fuentes (incl. CCAA) |
-| 2 | Base del frontend | App React con DuckDB WASM integrado, routing y estado global |
-| 3 | Visualizaciones nacionales | Las 6 páginas del presupuesto nacional con gráficas interactivas |
-| 4 | Despliegue y CI/CD | Sitio publicado en GitHub Pages con actualización mensual automática |
-| 5 | Visualizaciones CCAA | Mapa coroplético de transferencias y presupuestos autonómicos |
+| Fase | Objetivo | Estado |
+|------|----------|--------|
+| 1 | Pipeline de datos Python | ✅ Completo |
+| 2 | Base del frontend | ✅ Completo |
+| 3 | Visualizaciones nacionales | ✅ Completo |
+| 4 | Despliegue y CI/CD | ⏳ Pendiente |
+| 5 | Visualizaciones CCAA | ⏳ Pendiente |
+| 6 | Drill-down granular (gastos por función, impuestos por tipo) | ⏳ Pendiente |
 
 ### Dependencias entre fases
 
@@ -22,7 +23,7 @@ Fase 2 ──► Fase 3 ──► Fase 4
 
 ---
 
-## Fase 1: Pipeline de Datos Python
+## Fase 1: Pipeline de Datos Python ✅
 
 **Objetivo:** Generar el fichero `cuentas-publicas.duckdb` con datos reales de todas las fuentes oficiales.
 
@@ -42,13 +43,10 @@ Fase 2 ──► Fase 3 ──► Fase 4
   - `create_schema(conn)`: crea todas las tablas y vistas (idempotente con `IF NOT EXISTS`)
   - `upsert(conn, table, df, delete_where)`: helper con patrón DELETE+INSERT
 
-**Criterio de aceptación:** `python -m scraper --help` muestra el menú de comandos.
-
 ---
 
 ### Milestone 1.2 — Scraper AEAT (recaudación tributaria 1995–2024) ✅
 
-- [x] Identificar y documentar URLs de descarga del Anuario Estadístico AEAT (sede electrónica)
 - [x] Implementar `scrapers/aeat.py`:
   - Ficheros IART individuales por año (2017–2024); serie histórica 1995–2016 en hoja "1.6" del último IART
 - [x] Implementar `transform/aeat.py`:
@@ -56,37 +54,18 @@ Fase 2 ──► Fase 3 ──► Fase 4
   - `month = 0` como sentinel de total anual (NULL no permitido en PK DuckDB)
 - [x] Escribir en tabla `recaudacion_aeat` con upsert (206 filas, 1995–2024)
 
-**Verificación:**
-```sql
-SELECT year, impuesto, importe_neto
-FROM cp.recaudacion_aeat
-ORDER BY year, impuesto
-LIMIT 30;
--- Debe mostrar datos desde 1995
-```
-
 ---
 
 ### Milestone 1.3 — Scraper SEPG (plan presupuestario 2005–2025) ✅
 
-- [x] Identificar URLs de series históricas consolidadas SEPG:
-  - Un fichero `02 Presupuesto del Estado.xlsx` por año en la misma carpeta de estadísticas
 - [x] Implementar `scrapers/sepg.py`:
   - Browser User-Agent requerido (servidor bloquea el UA de Python)
   - Formato wide: capítulos en filas, años en columnas; hoja "21" gastos, "23" ingresos
-- [x] Implementar `transform/sepg.py`:
-  - `entidad = 'Estado'`; `normalize_gastos()` y `normalize_ingresos()`
+  - Regex `_YEAR_ANNOTATED_RE` para capturar cabeceras con anotación tipo `"2013 (*)"` (ficheros 2014+)
+  - `_insert_prorroga_2020()`: copia datos de 2018 → 2020 sintéticamente (sin PGE aprobado ese año)
+- [x] Implementar `transform/sepg.py`: `normalize_gastos()` y `normalize_ingresos()`
 - [x] Escribir en tablas `ingresos_plan` y `gastos_plan` (171 + 160 filas, 2005–2025)
-
-**Verificación:**
-```sql
-SELECT year, entidad, SUM(importe) AS total_gastos
-FROM cp.gastos_plan
-WHERE capitulo < 9 AND programa_cod IS NULL
-GROUP BY year, entidad
-ORDER BY year, entidad;
--- Total gastos consolidados 2024 debe ser ≈ 587.000 M€
-```
+- [x] Cobertura: 2005–2025 incluidos 2013 (vía columna anotada en ficheros posteriores) y 2020 (prorroga 2018)
 
 ---
 
@@ -96,38 +75,18 @@ ORDER BY year, entidad;
   - Ficheros "extracto diciembre" individuales por año (datos anuales acumulados)
   - 2009–2014 solo disponibles en PDF — cobertura real: 2015–2024
   - Fichero 2015 en formato `.xls` (requiere `xlrd`)
-  - Dos bloques de columnas (año actual / año anterior) en el mismo Excel; escaneo acotado al bloque del año correcto
-  - Capítulos identificados por prefijo numérico en la etiqueta
-- [x] Implementar `transform/igae.py`:
-  - `entidad = 'Estado'`; columnas `creditos_iniciales/definitivos`, `obligaciones_reconocidas`, `pagos_ordenados`
+- [x] Implementar `transform/igae.py`: `entidad = 'Estado'`
 - [x] Escribir en tablas `ingresos_ejecucion` y `gastos_ejecucion` (90 + 80 filas, 2015–2024)
 
-**Verificación:**
-```sql
-SELECT year,
-       SUM(obligaciones_reconocidas) AS gasto_ejecutado,
-       SUM(creditos_definitivos)     AS credito_definitivo
-FROM cp.gastos_ejecucion
-WHERE entidad = 'Estado'
-GROUP BY year ORDER BY year;
--- Comparar con cifras publicadas por IGAE para 2022 y 2023
-```
+> **Nota:** `gastos_ejecucion` almacena valores en **K€** (miles de euros). Las queries del frontend dividen por 1000 para convertir a M€.
 
 ---
 
 ### Milestone 1.5 — Scraper Seguridad Social ✅
 
-- [x] Fuente: mismo portal SEPG, fichero `03 Presupuesto de la Seguridad Social.xlsx` en cada carpeta de año
-  - Misma estructura wide que Estado; hoja "31" gastos, "32" ingresos
-- [x] Implementar `scrapers/seguridad_social.py` con descarga y parseo
-- [x] Integrar con tablas `ingresos_plan` y `gastos_plan` usando `entidad = 'SS'` (160 + 160 filas, 2005–2025)
-
-**Verificación:**
-```sql
-SELECT year, SUM(importe) FROM cp.gastos_plan
-WHERE entidad = 'SS' GROUP BY year ORDER BY year;
--- Debe mostrar datos desde 2010
-```
+- [x] Fuente: portal SEPG, fichero `03 Presupuesto de la Seguridad Social.xlsx`; hojas "31" gastos, "32" ingresos
+- [x] Implementar `scrapers/seguridad_social.py`
+- [x] Integrar con `ingresos_plan` y `gastos_plan` usando `entidad = 'SS'` (160 + 160 filas, 2005–2025)
 
 ---
 
@@ -136,262 +95,151 @@ WHERE entidad = 'SS' GROUP BY year ORDER BY year;
 - [x] CLI `click` en `main.py`: `run`, `run --source`, `run --year`, `status`
 - [x] Vistas pre-calculadas en `db.py`: `v_gastos_plan_seccion`, `v_gastos_plan_capitulo`, `v_ingresos_plan_capitulo`, `v_transferencias_ccaa_total`, `v_ccaa_resumen`
 - [x] Logging estructurado con `rich`
-- [x] Documentado en `scraper/README.md`
 
 ---
 
 ### Milestone 1.7 — Transferencias Estado → CCAA ✅
 
 - [x] Implementar `scrapers/transferencias_ccaa.py`:
-  - El desglose por CCAA de artículos 46/76 no está disponible como fichero estático en SEPG
   - Fuente real: `ccaa_ingresos` (caps. 4 corriente + 7 capital) del portal SGCIEF Liquidaciones
-  - Requiere que `ccaa` se ejecute primero; la fuente 'plan'='Presupuesto Inicial', 'ejecucion'='Derechos Reconocidos Netos'
+  - Requiere que el scraper `ccaa` se ejecute primero
 - [x] Escribir en tabla `transferencias_ccaa` (1.580 filas, 2002–2023)
-- [ ] **Pendiente (fase 2+):** Tabla `poblacion_ccaa` con datos INE Padrón Municipal (necesaria para vistas per cápita)
-
-**Verificación:**
-```sql
-SELECT year, ccaa_nom, SUM(importe) AS total
-FROM cp.transferencias_ccaa WHERE fuente='ejecucion'
-GROUP BY year, ccaa_nom ORDER BY year, total DESC LIMIT 20;
--- Andalucía, Cataluña y Valencia deben aparecer entre los mayores receptores
-```
+- [ ] **Pendiente:** Tabla `poblacion_ccaa` con datos INE Padrón Municipal (necesaria para vistas per cápita)
 
 ---
 
-### Milestone 1.8 — Scraper presupuestos CCAA (Ministerio de Hacienda consolidado) ✅
+### Milestone 1.8 — Scraper presupuestos CCAA (Ministerio de Hacienda) ✅
 
-- [x] Fuente: portal SGCIEF PublicacionLiquidaciones (`DescargaEconomicaDC.aspx?cdcdad={cod}&ano={year}`)
-  - Formulario ASP.NET; un fichero Excel por CCAA×año, con XML no estándar (col índice 0) reparado en el parseo
-  - Datos disponibles: 2002–2023 (19 CCAA)
-- [x] Implementar `scrapers/ccaa.py`:
-  - `fuente='plan'` ← Presupuesto Inicial; `fuente='ejecucion'` ← Derechos/Obligaciones Reconocidos Netos
-  - Normalización de ccaa_cod integrada en el scraper mediante `_CCAA_MAP`
-  - `ccaa_ref` poblada en `db.py` durante `create_schema()`
+- [x] Fuente: portal SGCIEF `DescargaEconomicaDC.aspx?cdcdad={cod}&ano={year}`
+  - Un fichero Excel por CCAA×año; 19 CCAA, 2002–2023
+- [x] Implementar `scrapers/ccaa.py`: `fuente='plan'` ← Presupuesto Inicial; `fuente='ejecucion'` ← Obligaciones/Derechos Reconocidos Netos
 - [x] Escribir en `ccaa_ingresos` y `ccaa_gastos` (7.110 + 7.092 filas, 2002–2023)
 
-**Verificación:**
-```sql
-SELECT year, ccaa_nom,
-       SUM(CASE WHEN fuente='plan'      THEN importe END) AS gastos_plan,
-       SUM(CASE WHEN fuente='ejecucion' THEN importe END) AS gastos_ejec
-FROM cp.ccaa_gastos GROUP BY year, ccaa_nom ORDER BY year, ccaa_nom LIMIT 30;
-```
-
 ---
 
-## Fase 2: Base del Frontend
+## Fase 2: Base del Frontend ✅
 
 **Objetivo:** Aplicación React funcional con DuckDB WASM integrado, navegación y estado global operativos.
 
-### Milestone 2.1 — Inicialización del proyecto
+### Milestone 2.1 — Inicialización del proyecto ✅
 
-- [ ] `npm create vite@latest web -- --template react-ts`
-- [ ] Instalar dependencias de producción:
-  ```
-  tailwindcss @tailwindcss/vite
-  echarts echarts-for-react
-  @duckdb/duckdb-wasm
-  zustand
-  react-router-dom
-  @tanstack/react-table
-  react-simple-maps
-  d3-scale d3-color d3-scale-chromatic
-  ```
-- [ ] Configurar `vite.config.ts`:
-  - `base: '/cuentas-publicas/'` (para GitHub Pages)
-  - `optimizeDeps.exclude: ['@duckdb/duckdb-wasm']`
-  - Cabeceras COOP/COEP en el dev server
-- [ ] Configurar Tailwind CSS v4 (plugin Vite)
-- [ ] Copiar `coi-serviceworker.js` a `web/public/`
-- [ ] Copiar `.duckdb` generado a `web/public/db/`
-
-**Criterio de aceptación:** `npm run dev` abre la app sin errores de compilación.
+- [x] Vite 5 + React 18 + TypeScript; gestor de paquetes: `pnpm`
+- [x] Dependencias instaladas: `tailwindcss @tailwindcss/vite`, `echarts echarts-for-react`, `@duckdb/duckdb-wasm`, `zustand`, `react-router-dom`, `react-simple-maps`, `d3-scale d3-color d3-scale-chromatic`
+- [x] `vite.config.ts`: `base: '/cuentas-publicas/'`, `optimizeDeps.exclude: ['@duckdb/duckdb-wasm']`, cabeceras COOP/COEP en dev server
+- [x] `coi-serviceworker.js` en `web/public/`
+- [x] `.duckdb` en `web/public/db/`
 
 ---
 
-### Milestone 2.2 — Integración DuckDB WASM
+### Milestone 2.2 — Integración DuckDB WASM ✅
 
-- [ ] Implementar `src/db/client.ts` (ver arquitectura): singleton `getDB()` + helper `query<T>(sql)`
-- [ ] Prueba de humo en `App.tsx`:
-  ```typescript
-  const count = await query('SELECT COUNT(*) AS n FROM cp.recaudacion_aeat');
-  console.log(count); // [{ n: <número filas> }]
-  ```
-- [ ] Verificar funcionamiento en Chrome y Firefox
-- [ ] Confirmar que `coi-serviceworker.js` se activa correctamente (revisar DevTools → Application → Service Workers)
+- [x] `src/db/client.ts`: singleton `getDB()` + helper `query<T>(sql)`
+  - Base de datos adjunta como alias `cp` (→ `cp.<tabla>` en todas las queries)
+- [x] Bug conocido: `DECIMAL(18,2)` serializado por DuckDB WASM `toJSON()` como entero ×100. **Fix:** `CAST(... AS DOUBLE)` en todas las queries.
 
 ---
 
-### Milestone 2.3 — Estado global y routing
+### Milestone 2.3 — Estado global y routing ✅
 
-- [ ] Implementar Zustand store completo (`src/store/filters.ts`):
-  - `years`, `selectedYear`, `compareYears`, `viewMode`, `entityType`
-  - Acción `initYears`: carga años disponibles desde DB al arrancar la app
-- [ ] Configurar React Router v6 con todas las rutas:
-  `/`, `/ingresos`, `/ingresos/impuestos`, `/gastos`, `/gastos/:seccion`, `/comparativa`
-- [ ] Implementar `AppShell.tsx`:
-  - Sidebar fija con enlaces de navegación e íconos
-  - Cabecera con título, selector de entidad (`EntityTypeSelector`) y selector de año (`YearSelector`)
-  - Layout responsivo (sidebar colapsa en pantallas pequeñas)
-- [ ] Implementar `YearSelector.tsx`: dropdown con años disponibles del store
-- [ ] Implementar `ViewModeToggle.tsx`: toggle Plan / Ejecución (visible en páginas Ingresos, Gastos, Comparativa)
+- [x] Zustand store en `src/store/filters.ts`: `years`, `selectedYear`, `viewMode`, `entityType`
+- [x] React Router v6: `/`, `/ingresos`, `/ingresos/impuestos`, `/gastos`, `/comparativa`
+- [x] `AppShell.tsx`: sidebar con navegación, `YearSelector` y selector de entidad integrados
+- [x] `YearSelector.tsx` y `ViewModeToggle.tsx`
 
 ---
 
-### Milestone 2.4 — Componentes UI base
+### Milestone 2.4 — Componentes UI base ✅
 
-- [ ] `KpiCard.tsx`: tarjeta con título, valor formateado en euros, variación porcentual YoY con flecha (▲/▼)
-- [ ] `LoadingSkeleton.tsx`: rectángulos animados que imitan el layout de gráficas y KPIs
-- [ ] `ErrorBoundary.tsx`: mensaje de error amigable si DuckDB WASM no carga
-- [ ] Helpers de formato en `src/utils/format.ts`:
-  - `formatEur(n)`: `123456789` → `"123.457 M€"` / `"1,2 B€"` según magnitud
-  - `formatPct(n)`: `0.045` → `"+4,5%"` con signo y color verde/rojo
-
-### Milestone 2.5 — Componentes educativos
-
-- [ ] Definir interfaz `Insight` en `src/utils/insights.ts`:
-  ```typescript
-  interface Insight {
-    label: string;        // "Recaudación IRPF"
-    value: string;        // "109.163 M€"
-    trend?: 'up' | 'down' | 'neutral';
-    trendValue?: string;  // "+8,3% vs 2022"
-    description: string;  // texto explicativo de 1–2 frases
-  }
-  ```
-- [ ] Implementar `ContextBox.tsx`:
-  - Acepta `title` (string) y `children` (ReactNode)
-  - Estilo: fondo neutro suave, borde izquierdo de acento, tipografía de cuerpo legible
-  - Colapsable en móvil con "Leer más / Ocultar"
-- [ ] Implementar `InsightsPanel.tsx`:
-  - Recibe `insights: Insight[]` y `isLoading?: boolean`
-  - Layout: fila horizontal de tarjetas en escritorio, lista vertical en móvil
-  - Cada tarjeta: etiqueta + valor grande + indicador de tendencia (▲ verde / ▼ rojo / — neutro) + descripción
-  - Muestra `LoadingSkeleton` mientras `isLoading=true`
-- [ ] Establecer el **layout estándar de página** en `AppShell.tsx` o como componente `PageLayout.tsx`:
-  `PageHeader → ContextBox → InsightsPanel → [visualización] → [tabla] → [nota de fuente]`
+- [x] `KpiCard.tsx`: estilo Economist — borde superior de acento, etiqueta uppercase, valor grande, tendencia ▲/▼
+- [x] `LoadingSkeleton.tsx` con prop `height`
+- [x] `ErrorBoundary.tsx`
+- [x] `src/utils/format.ts`:
+  - `formatEur(n)`: siempre **M€** con separador de miles (`useGrouping: true`); nunca B€
+  - `formatPct(n)`: devuelve `string | null`; null si `|ratio| < 0,1%` (evita "+0,0%" espurio)
+- [x] `InfoTooltip.tsx`: botón `i` circular con popover explicativo; toggle hover+clic; cierre al clic exterior
 
 ---
 
-## Fase 3: Visualizaciones de Datos
+### Milestone 2.5 — Componentes educativos 🔄
 
-**Objetivo:** Las cuatro páginas principales completamente funcionales con gráficas interactivas.
-
-### Milestone 3.1 — Página Inicio (Dashboard)
-
-- [ ] Implementar queries en `src/db/queries/ingresos.ts` y `gastos.ts` para totales anuales
-- [ ] KPI cards (año seleccionado vs año anterior):
-  - Total ingresos ejecutados / planificados
-  - Total gastos ejecutados / planificados
-  - Déficit / superávit
-  - Variación % respecto al año anterior
-- [ ] `BarChart.tsx` agrupado: ingresos vs gastos, toda la serie histórica disponible
-  - Eje X: años; barras azul (ingresos) y naranja (gastos)
-  - Tooltip con valores absolutos y diferencia
-- [ ] Cambiar `entityType` en la cabecera actualiza todos los KPIs y el gráfico en tiempo real
-- [ ] **Texto educativo:**
-  - `ContextBox`: qué son los PGE, qué engloba cada entidad (Estado, OO.AA., SS, Consolidado), diferencia entre plan y ejecución, nota sobre los años con presupuesto prorrogado
-  - `InsightsPanel` (dinámico): déficit/superávit del año seleccionado y comparación histórica; mayor y menor déficit de la serie; variación de ingresos y gastos YoY
-
-**Criterio de aceptación:** Dashboard carga en < 3s (incluyendo init WASM + fetch .duckdb).
+- [x] `ContextBox.tsx`: caja de contexto con título y contenido JSX; borde izquierdo de acento
+- [ ] `InsightsPanel.tsx`: panel de highlights dinámicos computados desde datos de la query
+  - Interfaz `Insight { label, value, trend?, trendValue?, description }`
+  - Las páginas actuales usan `KpiCard` para los highlights principales; InsightsPanel está pendiente de implementar
 
 ---
 
-### Milestone 3.2 — Página Ingresos
+## Fase 3: Visualizaciones de Datos 🔄
 
-- [ ] Query: ingresos por capítulo para el año y entidad seleccionados (plan o ejecución según `viewMode`)
-- [ ] `BarChart.tsx` apilado: un segmento por capítulo, colores diferenciados
-  - Capítulos: Impuestos directos, Impuestos indirectos, Tasas, Transferencias corrientes, Ingresos patrimoniales, Enajenación activos, Transferencias de capital, Activos financieros, Pasivos financieros
-- [ ] Tabla TanStack debajo del gráfico:
-  - Columnas: Capítulo | Descripción | Importe | % del total
-  - Ordenable por importe
-  - Fila de totales al pie
-- [ ] Enlace "Ver detalle AEAT" visible cuando capítulos 1 y 2 están seleccionados
-- [ ] **Texto educativo:**
-  - `ContextBox`: qué significa cada capítulo de ingresos (1–9), qué son los pasivos financieros como ingreso (emisión de deuda), qué diferencia hay entre derechos reconocidos y recaudación neta
-  - `InsightsPanel`: % que representan los impuestos (cap. 1+2) sobre el total; capítulo con mayor variación YoY; peso de los pasivos financieros (deuda) sobre el total (indicador de dependencia del endeudamiento)
+**Objetivo:** Las páginas principales completamente funcionales con gráficas interactivas.
+
+### Milestone 3.1 — Página Inicio (Dashboard) ✅
+
+- [x] `src/db/queries/ingresos.ts`: `getResumenAnual(entidad)` para totales anuales ingresos + gastos
+- [x] KPI cards: ingresos no financieros, gastos no financieros, saldo presupuestario (plan)
+- [x] `LineChart.tsx` multi-serie: ingresos vs gastos, serie histórica 2005–2025
+- [x] `ContextBox`: qué son los PGE, qué incluyen, diferencia plan/ejecución
 
 ---
 
-### Milestone 3.3 — Sub-página Impuestos (AEAT)
+### Milestone 3.2 — Página Ingresos ✅
 
-- [ ] Implementar queries en `src/db/queries/aeat.ts`:
-  - Serie histórica anual por tipo de impuesto (1995–2024)
-  - Desglose bruto/devoluciones/neto para el año seleccionado
-- [ ] `LineChart.tsx` multi-serie: IRPF, IVA, Sociedades, Especiales — evolución 1995–2024
-  - Selector de impuestos para mostrar/ocultar series
-  - Tooltip con valor absoluto y % del total de ese año
-- [ ] `SunburstChart.tsx` para el año seleccionado:
-  - Nivel 1: tipo de impuesto
-  - Nivel 2: bruto / devoluciones / neto
-- [ ] **Texto educativo:**
-  - `ContextBox`: qué es cada impuesto (IRPF, IVA, Sociedades, Especiales), diferencia entre recaudación bruta y neta, qué son las devoluciones y por qué existen, qué es el ciclo económico y cómo afecta a la recaudación
-  - `InsightsPanel`: impuesto con mayor crecimiento YoY; ratio devoluciones/bruto del IVA (indica ciclo económico); año de máxima recaudación total en la serie histórica; evolución desde la crisis de 2008 hasta hoy
+- [x] `src/db/queries/ingresos.ts`: `getIngresosPorCapitulo`, `getTotalIngresosPorAnio`, `CAPITULO_INGRESOS`, `CAPITULO_INGRESOS_TOOLTIP`
+- [x] `BarChart.tsx` horizontal por capítulo (año actual)
+- [x] `LineChart.tsx` de evolución histórica total
+- [x] Tabla con capítulo / descripción / importe / % del total
+- [x] `InfoTooltip` en cada fila de la tabla explicando el capítulo
+- [x] Enlace a `/ingresos/impuestos`
 
 ---
 
-### Milestone 3.4 — Página Gastos (Treemap + Drill-down)
+### Milestone 3.3 — Sub-página Impuestos (AEAT) ✅
 
-- [ ] Query: gastos por sección para el año y entidad seleccionados (vista `v_gastos_plan_seccion`)
-- [ ] `TreemapChart.tsx` con drill-down nativo ECharts:
-  - Nivel 1: secciones (Ministerios/Organismos) — tamaño proporcional al importe
-  - Nivel 2 (clic en sección): programas de esa sección
-  - Nivel 3 (clic en programa): desglose por capítulo económico
-  - Botón "Volver" en cada nivel
-- [ ] Panel lateral al seleccionar una sección:
-  - `LineChart.tsx` con evolución histórica del gasto de esa sección
-  - Importe del año actual y variación vs año anterior
-- [ ] `BarChart.tsx` horizontal debajo: top 10 secciones ordenadas por importe
-  - Clic en barra navega a `/gastos/:seccion`
-- [ ] **Texto educativo:**
-  - `ContextBox`: qué es la clasificación orgánica (sección = Ministerio), qué es la clasificación económica (capítulos 1–9), cómo leer un treemap, diferencia entre gasto corriente e inversión
-  - `InsightsPanel`: 3 secciones con mayor gasto y su % del total; sección con mayor crecimiento YoY; peso del gasto en Protección Social sobre el total
+- [x] `src/db/queries/aeat.ts`: `getRecaudacionHistorica`, `getRecaudacionAnio`, `getAniosAeat`, `IMPUESTO_COLORS`
+- [x] `LineChart.tsx` multi-serie: IRPF, IVA, Sociedades, Especiales, Otros — 1995–2024
+- [x] `BarChart.tsx` horizontal para el año seleccionado (fallback al último año AEAT si el seleccionado > 2024)
+- [x] Tabla con impuesto / bruto / devoluciones / neto / % del total
 
 ---
 
-### Milestone 3.5 — Sub-página Programa (detalle de sección)
+### Milestone 3.4 — Página Gastos ✅ (simplificado)
 
-- [ ] Ruta `/gastos/:seccion` recibe `seccion_cod` como parámetro
-- [ ] Cabecera: nombre de la sección + breadcrumb "Gastos > [Sección]"
-- [ ] Tabla TanStack de programas:
-  - Columnas: Código | Nombre | Importe plan | Importe ejecutado | Desviación %
-  - Filtro de texto por nombre de programa
-  - Ordenación por cualquier columna
-- [ ] `BarChart.tsx` horizontal: programas de la sección ordenados por importe planificado
-- [ ] Enlace "← Volver a Gastos"
-- [ ] **Texto educativo:**
-  - `ContextBox`: qué es un programa presupuestario, cómo se estructura (política de gasto → programa → subprograma), qué hace este Ministerio/sección concreta
-  - `InsightsPanel`: programa con mayor importe; programa con mayor desviación plan/ejecución; % del gasto de esta sección sobre el total nacional
+- [x] `src/db/queries/gastos.ts`: `getGastosPorCapitulo`, `getGastosHistoricoPorCapitulo`, `CAPITULO_GASTOS`, `CAPITULO_GASTOS_TOOLTIP`
+- [x] `BarChart.tsx` horizontal por capítulo operacional (1–7, excluye 8 y 9)
+- [x] `LineChart.tsx` multi-serie por capítulo, evolución histórica
+- [x] Tabla con capítulo / descripción / importe / % del gasto operacional
+- [x] `InfoTooltip` en cada fila de la tabla
+- [ ] **Pendiente:** `TreemapChart.tsx` con drill-down por sección (Ministerio) → programa → capítulo
+
+> El treemap con drill-down orgánico (sección/programa) requiere que `gastos_plan` esté poblado con `seccion_cod` y `programa_cod`. Actualmente los datos SEPG solo tienen clasificación económica (capítulos). Se implementará cuando se disponga de datos orgánicos.
 
 ---
 
-### Milestone 3.6 — Página Comparativa (Plan vs Ejecución)
+### Milestone 3.5 — Sub-página Programa ⏳
 
-- [ ] Selector de año único (el plan y la ejecución son siempre del mismo año)
-- [ ] `BarChart.tsx` agrupado por sección:
-  - Barra azul: importe planificado
-  - Barra naranja: obligaciones reconocidas (ejecución)
-  - Solo top 15 secciones por importe para legibilidad
-- [ ] Tabla TanStack con todas las secciones:
-  - Columnas: Sección | Plan (€) | Ejecución (€) | Desviación (€) | Desviación (%)
-  - Ordenable por desviación (%) para identificar las secciones más desviadas
-  - Formato condicional: desviación > 10% en rojo, < -10% en verde
-- [ ] Filtro: slider "Mostrar solo secciones con desviación > X%" (0–50%)
-- [ ] KPI cards de resumen: total planificado, total ejecutado, desviación global
-- [ ] **Texto educativo:**
-  - `ContextBox`: qué es la ejecución presupuestaria, por qué el gasto ejecutado difiere del planificado (transferencias pendientes, proyectos retrasados, créditos extraordinarios), qué son los créditos definitivos vs iniciales, qué significa una tasa de ejecución del 95%
-  - `InsightsPanel`: tasa de ejecución global del año; sección con mayor y menor tasa de ejecución; importe total de crédito no ejecutado (=desperdicio presupuestario percibido)
+- [ ] Ruta `/gastos/:seccion` con tabla de programas y gráfico de barras
+- Bloqueado por: datos de sección/programa no disponibles en la fuente actual
 
 ---
 
-## Fase 4: Despliegue y Automatización
+### Milestone 3.6 — Página Comparativa (Plan vs Ejecución) ✅
+
+- [x] `getComparativaPorCapitulo(year, entidad)`: LEFT JOIN gastos_plan ↔ gastos_ejecucion
+- [x] `BarChart.tsx` agrupado (Plan azul / Ejecución naranja) — solo visible para años 2015–2024
+- [x] Tabla: capítulo / descripción / plan / ejecución / desviación € / % ejecución
+- [x] `InfoTooltip` en cada fila
+- [x] Aviso ámbar para años fuera del rango de ejecución disponible
+- [x] KPI cards: gastos plan, gastos ejecutados, desviación, crédito no ejecutado
+
+---
+
+## Fase 4: Despliegue y Automatización ⏳
 
 **Objetivo:** Sitio publicado en GitHub Pages con pipeline CI/CD automatizado.
 
 ### Milestone 4.1 — Primera publicación en GitHub Pages
 
-- [ ] Verificar `base: '/cuentas-publicas/'` en `vite.config.ts`
+- [ ] Verificar `base: '/cuentas-publicas/'` en `vite.config.ts` (ya configurado)
 - [ ] Crear `.github/workflows/deploy.yml`:
   ```yaml
   on:
@@ -402,8 +250,8 @@ FROM cp.ccaa_gastos GROUP BY year, ccaa_nom ORDER BY year, ccaa_nom LIMIT 30;
     deploy:
       steps:
         - uses: actions/checkout@v4
-        - uses: actions/setup-node@v4 (Node 20)
-        - run: cd web && npm ci && npm run build
+        - uses: actions/setup-node@v4 (Node 22)
+        - run: cd web && pnpm install && pnpm build
         - uses: peaceiris/actions-gh-pages@v3
           with:
             github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -411,7 +259,6 @@ FROM cp.ccaa_gastos GROUP BY year, ccaa_nom ORDER BY year, ccaa_nom LIMIT 30;
   ```
 - [ ] Activar GitHub Pages en la configuración del repo (fuente: rama `gh-pages`)
 - [ ] Verificar que `coi-serviceworker.js` se registra correctamente en producción
-- [ ] Verificar que DuckDB WASM carga y las gráficas renderizan en la URL de GitHub Pages
 
 ---
 
@@ -422,7 +269,7 @@ FROM cp.ccaa_gastos GROUP BY year, ccaa_nom ORDER BY year, ccaa_nom LIMIT 30;
   on:
     schedule:
       - cron: '0 6 1 * *'   # 1º de cada mes a las 6:00 UTC
-    workflow_dispatch:        # permite ejecución manual
+    workflow_dispatch:
   jobs:
     update:
       steps:
@@ -437,129 +284,227 @@ FROM cp.ccaa_gastos GROUP BY year, ccaa_nom ORDER BY year, ccaa_nom LIMIT 30;
             git diff --staged --quiet || git commit -m "chore: actualizar datos [skip ci]"
             git push
         - uses: actions/github-script@v7  # dispara deploy.yml
-          with:
-            script: |
-              github.rest.actions.createWorkflowDispatch({...})
   ```
-- [ ] Probar ejecución manual del workflow desde la pestaña Actions
 
 ---
 
 ### Milestone 4.3 — Pulido final
 
-- [ ] Diseño **responsive**:
-  - Sidebar colapsa a menú hamburguesa en pantallas < 768px
-  - Gráficas redimensionan correctamente con `echarts-for-react` + `ResizeObserver`
-- [ ] **Pantalla de carga inicial**: spinner o skeleton mientras DuckDB WASM se inicializa (~2–3s en primera visita)
-- [ ] **Meta tags SEO** en `web/index.html`:
-  - `<title>`, `<meta name="description">`, Open Graph tags
-- [ ] `.gitignore` actualizado: excluir `web/public/db/*.duckdb` (fichero grande, gestionado por CI)
-- [ ] `README.md` actualizado con:
-  - Badge del estado del workflow de deploy
-  - Instrucciones de desarrollo local (`scraper` + `web`)
-  - Instrucciones de despliegue manual
+- [ ] Diseño responsive: sidebar colapsa a menú hamburguesa en pantallas < 768px
+- [ ] Pantalla de carga inicial mientras DuckDB WASM se inicializa (~2–3s)
+- [ ] Meta tags SEO en `web/index.html`
+- [ ] `.gitignore`: excluir `web/public/db/*.duckdb` (fichero grande, gestionado por CI)
+- [ ] `README.md` con instrucciones de desarrollo local y despliegue
 
 ---
 
----
+## Fase 5: Visualizaciones CCAA ⏳
 
-## Fase 5: Visualizaciones CCAA
-
-**Objetivo:** Mapa coroplético interactivo de transferencias del Estado a CCAA y exploración de presupuestos autonómicos. Requiere Fase 1 completa (milestones 1.7 y 1.8) y Fase 4 desplegada.
+**Objetivo:** Mapa coroplético interactivo de transferencias y presupuestos autonómicos. Requiere Fase 1 completa y Fase 4 desplegada.
 
 ### Milestone 5.1 — GeoJSON y componente ChoroplethMap
 
-- [ ] Obtener GeoJSON de CCAA españolas:
-  - Fuente preferida: IGN (Instituto Geográfico Nacional) — cartografía oficial
-  - Alternativa: Natural Earth admin-1
-  - Verificar que incluye `ccaa_cod` (o nombre normalizable) en `properties` de cada feature
-  - Reposicionar Canarias en recuadro: transformar coordenadas de las geometrías canarias en el fichero GeoJSON para situarlas en la esquina inferior izquierda (técnica estándar en mapas de España)
-  - Guardar en `web/public/geo/ccaa.json` (simplificado para reducir tamaño, < 200 KB)
+- [ ] Obtener y preparar GeoJSON de CCAA (`web/public/geo/ccaa.json`, < 200 KB, Canarias en recuadro)
 - [ ] Implementar `src/components/charts/ChoroplethMap.tsx`:
-  ```typescript
-  // Props
-  interface ChoroplethMapProps {
-    data: Record<string, number>;        // ccaa_cod → valor numérico
-    domain: [number, number];            // [min, max] para escala de color
-    colorScheme?: 'blues' | 'reds' | 'greens' | 'rdylgn';
-    onSelect: (ccaaCod: string) => void;
-    selectedCcaa: string | null;
-    tooltipFormatter?: (val: number) => string;
-  }
-  ```
-  - Usa `react-simple-maps`: `<ComposableMap>`, `<Geographies>`, `<Geography>`
-  - Escala de color con `d3-scale` `scaleSequential` + `d3-scale-chromatic` `interpolateBlues`
-  - Tooltip posicionado con `onMouseEnter` + estado local de posición
-  - Leyenda de gradiente debajo del mapa con valores min/max formateados
-  - Borde más grueso en la CCAA seleccionada
-
-**Criterio de aceptación:** Mapa renderiza correctamente en local; hover muestra tooltip; clic llama a `onSelect`.
+  - `react-simple-maps` + `d3-scale scaleSequential` + `d3-scale-chromatic`
+  - Props: `data: Record<ccaa_cod, number>`, `domain`, `colorScheme`, `onSelect`, `selectedCcaa`, `tooltipFormatter`
+  - Tooltip en hover; borde destacado en CCAA seleccionada; leyenda de gradiente
 
 ---
 
 ### Milestone 5.2 — Página Transferencias
 
-- [ ] Implementar queries en `src/db/queries/ccaa.ts`:
-  - `getTransferenciasPorCcaa(year, fuente)` → `Record<ccaa_cod, { total, corriente, capital, fci, ue }>`
-  - `getTransferenciasSerie(ccaa_cod, fuente)` → array `{ year, total, corriente, capital, fci, ue }`
-  - `getPoblacionCcaa(year)` → `Record<ccaa_cod, number>` (para calcular per cápita en frontend)
-- [ ] Implementar `src/pages/Transferencias/index.tsx`:
-  - Layout: mapa (izquierda 50%) + tabla TanStack (derecha 50%), sincronizados
-  - Selector de variable del coroplético: Total €, Per cápita €/hab, Solo corrientes, Solo capital, FCI, UE
+- [ ] `src/db/queries/ccaa.ts`: `getTransferenciasPorCcaa(year, fuente)`, `getTransferenciasSerie(ccaa_cod, fuente)`
+- [ ] `src/pages/Transferencias/index.tsx`:
+  - Layout: mapa (izq.) + tabla TanStack (dcha.), sincronizados por selección de CCAA
+  - Selector de variable: Total €, Per cápita, Corrientes, Capital, FCI, UE
   - `ViewModeToggle` Plan / Ejecución
-  - Tabla TanStack: CCAA | Total | Per cápita | Corrientes | Capital | FCI | UE — ordenable por cualquier columna; fila de la CCAA seleccionada resaltada
-  - Panel expandible al seleccionar CCAA: `LineChart` con serie histórica de transferencias (total y desglose por tipo)
-- [ ] Añadir enlace "Ver presupuesto →" en el panel que navega a `/ccaa/:id`
-- [ ] **Texto educativo:**
-  - `ContextBox`: qué es el Sistema de Financiación Autonómica, qué son las transferencias corrientes vs de capital, qué es el FCI y su objetivo constitucional (reducir desequilibrios territoriales), qué fondos UE se canalizan a las CCAA (FEDER, FSE)
-  - `InsightsPanel`: CCAA con mayor transferencia per cápita; CCAA con mayor crecimiento de transferencias en la última década; diferencia entre la CCAA que más y menos recibe per cápita
-
-**Criterio de aceptación:** Cambiar variable del coroplético actualiza colores del mapa y ordena la tabla por esa misma variable; clic en CCAA muestra panel con serie histórica.
+  - Panel con `LineChart` histórico al seleccionar CCAA
 
 ---
 
 ### Milestone 5.3 — Página CCAA Overview
 
-- [ ] Implementar queries adicionales en `src/db/queries/ccaa.ts`:
-  - `getCcaaResumen(year)` → array con ingresos, gastos, déficit y % ejecución de cada CCAA
-- [ ] Implementar `src/pages/CCAA/index.tsx`:
-  - `ChoroplethMap` reutilizado con variable seleccionable: Gasto total, Ingreso total, Déficit, % ejecución
-  - Tabla TanStack debajo (o a la derecha): CCAA | Ingresos plan | Ingresos ejec | Gastos plan | Gastos ejec | Déficit | % ejec
-  - Clic en región del mapa o fila de tabla → navega a `/ccaa/:id`
-  - `YearSelector` y `ViewModeToggle` globales aplican al mapa y la tabla
-- [ ] **Texto educativo:**
-  - `ContextBox`: qué competencias gestionan las CCAA (sanidad, educación, servicios sociales), por qué los presupuestos autonómicos son en conjunto similares en tamaño al del Estado, cómo se financia una CCAA (tributos cedidos + transferencias + deuda)
-  - `InsightsPanel`: CCAA con mayor gasto per cápita; tasa de ejecución media de las CCAA; CCAA con mayor déficit absoluto y relativo
+- [ ] `getCcaaResumen(year)`: ingresos, gastos, déficit, % ejecución por CCAA
+- [ ] `src/pages/CCAA/index.tsx`: mapa + tabla TanStack; clic navega a `/ccaa/:id`
 
 ---
 
 ### Milestone 5.4 — Página CCAA Detalle
 
-- [ ] Implementar `src/pages/CCAA/Detalle.tsx` (ruta `/ccaa/:id`):
-  - Cabecera: nombre de la CCAA + año seleccionado + KPI cards (ingresos, gastos, déficit, variación YoY)
-  - Tres tabs dentro de la misma página:
-    - **Ingresos**: `BarChart` apilado por capítulo + tabla TanStack (mismo patrón que `/ingresos` nacional)
-    - **Gastos**: `BarChart` apilado por capítulo + tabla TanStack (los datos del Ministerio no tienen desglose por sección/programa, solo por capítulo)
-    - **Comparativa**: `BarChart` agrupado plan vs ejecución por capítulo + tabla desviación
-  - Enlace a la página de Transferencias filtrada por esa CCAA: "← Ver transferencias recibidas"
-  - Breadcrumb: "CCAA > [nombre]"
-- [ ] Añadir `/ccaa` y `/ccaa/:id` al router en `App.tsx`
-- [ ] Añadir sección "Comunidades Autónomas" en la sidebar de `AppShell.tsx` con enlaces a Transferencias y CCAA Overview
-- [ ] **Texto educativo:**
-  - `ContextBox` (personalizada por CCAA si es posible, o genérica): qué competencias tiene esta comunidad, cuáles son sus principales fuentes de ingreso, qué organismos gestionan sus presupuestos
-  - `InsightsPanel`: gasto per cápita de esta CCAA vs media nacional; tasa de ejecución de esta CCAA vs media; principal capítulo de gasto y su % del total
+- [ ] `src/pages/CCAA/Detalle.tsx` (ruta `/ccaa/:id`):
+  - KPI cards + tres tabs: Ingresos / Gastos / Comparativa
+  - Mismo patrón visual que las páginas nacionales equivalentes
 
 ---
 
-## Checklist de Verificación Final
+---
 
-- [ ] `python -m scraper run` completa sin errores y genera `.duckdb` con datos de todas las fuentes, incluyendo tablas CCAA
-- [ ] `duckdb cuentas-publicas.duckdb -c "SELECT year, SUM(importe_neto) FROM recaudacion_aeat GROUP BY year ORDER BY year"` muestra filas desde 1995
-- [ ] `duckdb cuentas-publicas.duckdb -c "SELECT year, ccaa_nom, SUM(importe) FROM transferencias_ccaa WHERE fuente='ejecucion' GROUP BY ALL ORDER BY year, 3 DESC LIMIT 20"` muestra resultados coherentes
-- [ ] `cd web && npm run dev` abre la app, DuckDB WASM carga, dashboard muestra KPIs y gráfica
-- [ ] Clic en "Gastos" → treemap renderiza secciones → clic en sección → drill-down a programas
-- [ ] Página Comparativa con año 2023: barras plan vs ejecución visibles, tabla con desviaciones
-- [ ] Página Transferencias: mapa coroplético renderiza con colores diferenciados; clic en Andalucía → panel con serie histórica
-- [ ] Página CCAA → clic en Cataluña → navega a `/ccaa/CT` → tabs Ingresos/Gastos/Comparativa funcionales
-- [ ] Build de producción: `npm run build` sin warnings, `dist/` generado correctamente
-- [ ] GitHub Pages: URL pública carga correctamente, service worker activo, no hay errores CORS
+## Fase 6: Drill-down Granular ⏳
+
+**Objetivo:** Añadir datos de mayor granularidad para explorar el detalle funcional del gasto y el detalle por tipo de los impuestos. Requiere Fase 4 desplegada. Los datos de esta fase se añaden al `.duckdb` existente como tablas nuevas.
+
+---
+
+### Milestone 6.1 — Gastos por función (clasificación funcional COFOG)
+
+La clasificación económica por capítulos (fase 1) solo dice *qué tipo* de gasto es (personal, transferencias, inversión…). La clasificación **funcional** dice *para qué* se gasta: sanidad, educación, defensa, pensiones, etc.
+
+**Fuentes:**
+- **IGAE — Contabilidad Nacional**: publica el gasto de las AAPP según la clasificación COFOG (Classification of Functions of Government) en series anuales. Disponible en el portal de la IGAE y en Eurostat (`gov_10a_exp`).
+- **SEPG — Clasificación por programas**: cada programa presupuestario tiene un código de política de gasto (`XX`) que mapea aproximadamente a funciones. Los ficheros de SEPG incluyen `programa_cod` y `programa_nom`; actualmente el scraper no los parsea (solo capítulos).
+- **Seguridad Social**: el gasto en pensiones contributivas se puede extraer directamente de los ficheros SS ya descargados, a nivel de artículo (art. 10–19 = pensiones, art. 26 = desempleo…).
+
+**Tablas nuevas:**
+```sql
+-- Gasto por función COFOG (IGAE, nivel 1 y 2)
+CREATE TABLE gastos_funcion (
+    year        INTEGER NOT NULL,
+    entidad     VARCHAR NOT NULL,   -- 'AAPP','Estado','CCAA','CCLL','SS'
+    cofog_cod   VARCHAR NOT NULL,   -- '01' Servicios generales, '02' Defensa, '03' Orden público,
+                                    -- '04' Economía, '05' Medio ambiente, '06' Vivienda,
+                                    -- '07' Sanidad, '08' Ocio/cultura, '09' Educación, '10' Protección social
+    cofog_nom   VARCHAR NOT NULL,
+    fuente      VARCHAR NOT NULL,   -- 'plan' | 'ejecucion'
+    importe     DECIMAL(18,2),
+    PRIMARY KEY (year, entidad, cofog_cod, fuente)
+);
+
+-- Gasto por programa presupuestario (SEPG, clasificación orgánica + funcional)
+CREATE TABLE gastos_programa (
+    year          INTEGER NOT NULL,
+    entidad       VARCHAR NOT NULL,
+    seccion_cod   VARCHAR NOT NULL,
+    seccion_nom   VARCHAR NOT NULL,
+    politica_cod  VARCHAR NOT NULL,   -- 2 dígitos: '23' Servicios sociales, '31' Sanidad, etc.
+    politica_nom  VARCHAR NOT NULL,
+    programa_cod  VARCHAR NOT NULL,   -- 4+1 dígitos: '231A' Pensiones contributivas
+    programa_nom  VARCHAR NOT NULL,
+    capitulo      INTEGER NOT NULL,
+    importe       DECIMAL(18,2),
+    PRIMARY KEY (year, entidad, seccion_cod, programa_cod, capitulo)
+);
+```
+
+**Scrapers a implementar:**
+- `scrapers/igae_cofog.py`: descarga la tabla de gasto COFOG de la IGAE (portal Contabilidad Nacional o Eurostat API). Serie 2000–2024.
+- `scrapers/sepg_programas.py`: ampliar el parseo de los ficheros SEPG para capturar también la columna `programa_cod` y `programa_nom` (actualmente ignoradas al leer solo capítulos). Esto desbloquea el drill-down Ministerio → Programa → Capítulo.
+
+**Frontend — Página Gastos (drill-down):**
+- `TreemapChart.tsx`: treemap ECharts con drill-down. Nivel 1: función COFOG o Ministerio. Nivel 2: programas. Nivel 3: capítulos económicos.
+- Ruta `/gastos/:seccion`: detalle de un Ministerio con sus programas y el desglose económico de cada uno.
+- Selector en la página Gastos: "Ver por función" (COFOG) / "Ver por Ministerio" (orgánico).
+
+**Ejemplos de insights posibles:**
+- Pensiones: `programa_cod LIKE '10%'` o COFOG `10.2` → cuánto del total va a pensiones contributivas
+- Sanidad: COFOG `07` → transferencias del Estado al SNS
+- Defensa: sección "14 Ministerio de Defensa" o COFOG `02`
+- Educación: COFOG `09` → mayoritariamente transferencias a CCAA
+
+---
+
+### Milestone 6.2 — IVA por tipo impositivo
+
+El IVA en España se aplica a tres tipos: **general (21%)**, **reducido (10%)** y **super-reducido (4%)**. La AEAT publica el desglose en el Anuario Estadístico (tabla de recaudación IVA por régimen y tipo).
+
+**Fuente:** AEAT Anuario Estadístico — tabla "IVA: operaciones interiores por tipo impositivo". Disponible como Excel por año desde ~2010.
+
+**Tabla nueva:**
+```sql
+CREATE TABLE recaudacion_iva_tipo (
+    year        INTEGER NOT NULL,
+    tipo        VARCHAR NOT NULL,   -- 'general' (21%), 'reducido' (10%), 'superreducido' (4%)
+    base_imponible  DECIMAL(18,2),
+    cuota_devengada DECIMAL(18,2),
+    PRIMARY KEY (year, tipo)
+);
+```
+
+**Scraper:** Ampliar `scrapers/aeat.py` o crear `scrapers/aeat_iva.py` para descargar la tabla de IVA por tipo.
+
+**Frontend — Sub-página IVA:**
+- Ruta `/ingresos/impuestos/iva` accesible desde la página de Impuestos.
+- Gráfico de barras apiladas: cuota devengada por tipo a lo largo del tiempo.
+- Insight: "Los bienes de primera necesidad (tipo 4%) representan el X% de la base imponible pero solo el Y% de la cuota, ilustrando el efecto redistributivo del sistema de tipos".
+
+---
+
+### Milestone 6.3 — IRPF por tramo de renta
+
+La AEAT publica estadísticas de IRPF por tramo de base liquidable, que permiten ver la distribución de la carga fiscal entre rentas bajas, medias y altas.
+
+**Fuente:** AEAT — "Estadísticas de los declarantes del IRPF" (publicación anual con datos del ejercicio anterior). Descarga Excel con tabla por tramos de renta.
+
+**Tabla nueva:**
+```sql
+CREATE TABLE irpf_tramos (
+    year              INTEGER NOT NULL,
+    tramo_desde       DECIMAL(12,2),   -- límite inferior del tramo (€)
+    tramo_hasta       DECIMAL(12,2),   -- límite superior (NULL = sin límite)
+    num_declarantes   INTEGER,
+    base_liquidable   DECIMAL(18,2),
+    cuota_integra     DECIMAL(18,2),
+    cuota_resultante  DECIMAL(18,2),   -- tras deducciones
+    PRIMARY KEY (year, tramo_desde)
+);
+```
+
+**Frontend — Sub-página IRPF:**
+- Ruta `/ingresos/impuestos/irpf`.
+- Gráfico de barras: número de declarantes y cuota media por tramo (año seleccionado).
+- Gráfico de área: % de la recaudación total aportado por cada tramo.
+- Insight: "El X% de los declarantes con rentas superiores a 60.000 € aportan el Y% de la recaudación total del IRPF".
+
+---
+
+### Milestone 6.4 — Pensiones (detalle Seguridad Social)
+
+Los datos de SS ya están cargados a nivel de capítulo. La TGSS publica el detalle por tipo de pensión (jubilación, incapacidad, viudedad, orfandad) con número de pensionistas e importe medio.
+
+**Fuente:** TGSS — "Estadística de pensiones contributivas" (portal datos.gob.es o descarga directa TGSS). Serie mensual y anual.
+
+**Tabla nueva:**
+```sql
+CREATE TABLE pensiones_ss (
+    year            INTEGER NOT NULL,
+    month           INTEGER,          -- NULL = total anual
+    tipo            VARCHAR NOT NULL, -- 'jubilacion','incapacidad','viudedad','orfandad','favor_familiar'
+    regimen         VARCHAR,          -- 'general','autonomos','agrario', etc. (opcional)
+    num_pensiones   INTEGER,
+    importe_total   DECIMAL(18,2),    -- M€
+    pension_media   DECIMAL(10,2),    -- €/mes
+    PRIMARY KEY (year, COALESCE(month,0), tipo, COALESCE(regimen,''))
+);
+```
+
+**Frontend — Sub-página Pensiones:**
+- Ruta `/gastos/pensiones` (o desde la página de Gastos como enlace en el insight de cap. 4).
+- KPI: pensión media, número de pensionistas, gasto total.
+- Gráfico de línea: evolución de la pensión media y el número de pensionistas (1990–hoy).
+- Gráfico de barras apiladas: distribución del gasto por tipo de pensión.
+
+---
+
+### Dependencias de la Fase 6
+
+```
+Fase 1 (datos base) ──► Fase 6.1 (amplía scrapers SEPG/IGAE)
+                    ──► Fase 6.2–6.3 (amplía scraper AEAT)
+                    ──► Fase 6.4 (nuevo scraper TGSS)
+Fase 3 (páginas base) ──► Fase 6 (añade drill-down sobre páginas existentes)
+Fase 4 (despliegue) ──► necesario antes de publicar Fase 6
+```
+
+---
+
+## Notas de Implementación
+
+| Tema | Decisión |
+|------|----------|
+| Unidades monetarias | Siempre **M€** (`formatEur`). Nunca B€ (ambiguo: billón = 10¹² en español) |
+| DuckDB WASM decimal | `CAST(... AS DOUBLE)` en todas las queries para evitar ×100 en `toJSON()` |
+| `gastos_ejecucion` | Valores en **K€**; dividir por 1000 en la query |
+| 2020 sin PGE | Prorroga de 2018 insertada sintéticamente por `_insert_prorroga_2020()` en `sepg.py` |
+| 2013 en SEPG | Datos en columna anotada `"2013 (*)"` de ficheros 2014+; capturado con `_YEAR_ANNOTATED_RE` |
+| Años prorrogados | `ingresos_plan` es idéntico para 2023, 2024-P y 2025-P (presupuesto extendido) |
+| AEAT vs Estado | AEAT recauda para todas las AAPP; Estado retiene ~50% tras distribución territorial a CCAA |

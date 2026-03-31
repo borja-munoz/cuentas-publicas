@@ -13,8 +13,8 @@ export default function LoadingSkeleton({ rows = 4, className = '' }: LoadingSke
   )
 }
 
-export function ChartSkeleton({ className = '' }: { className?: string }) {
+export function ChartSkeleton({ className = '', height = 320 }: { className?: string; height?: number }) {
   return (
-    <div className={`animate-pulse rounded-xl bg-gray-100 ${className}`} style={{ minHeight: 320 }} />
+    <div className={`animate-pulse rounded bg-gray-100 ${className}`} style={{ height }} />
   )
 }

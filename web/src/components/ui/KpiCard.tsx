@@ -4,23 +4,31 @@ interface KpiCardProps {
   trendValue?: string
   trend?: 'up' | 'down' | 'neutral'
   subtitle?: string
+  accent?: boolean
 }
 
-export default function KpiCard({ title, value, trendValue, trend, subtitle }: KpiCardProps) {
+export default function KpiCard({ title, value, trendValue, trend, subtitle, accent }: KpiCardProps) {
   const trendColor =
-    trend === 'up' ? 'text-green-600' : trend === 'down' ? 'text-red-600' : 'text-gray-500'
-  const trendIcon = trend === 'up' ? '▲' : trend === 'down' ? '▼' : '—'
+    trend === 'up' ? 'text-emerald-700' : trend === 'down' ? 'text-red-700' : 'text-[var(--color-ink-faint)]'
+  const trendIcon = trend === 'up' ? '▲' : trend === 'down' ? '▼' : ''
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-      <p className="text-sm font-medium text-gray-500">{title}</p>
-      <p className="mt-1 text-2xl font-bold text-gray-900">{value}</p>
+    <div className={`border-t-2 ${accent ? 'border-[var(--color-accent)]' : 'border-[var(--color-ink)]'} bg-white pt-3 pb-4 px-1`}>
+      <p className="text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-[var(--color-ink-muted)]">
+        {title}
+      </p>
+      <p className="mt-1.5 text-[1.75rem] font-bold leading-none text-[var(--color-ink)] tabular-nums">
+        {value}
+      </p>
       {trendValue && (
-        <p className={`mt-1 text-sm font-medium ${trendColor}`}>
-          {trendIcon} {trendValue}
+        <p className={`mt-1.5 text-xs font-medium ${trendColor}`}>
+          {trendIcon && <span className="mr-0.5">{trendIcon}</span>}
+          {trendValue}
         </p>
       )}
-      {subtitle && <p className="mt-1 text-xs text-gray-400">{subtitle}</p>}
+      {subtitle && (
+        <p className="mt-1 text-[0.7rem] text-[var(--color-ink-faint)]">{subtitle}</p>
+      )}
     </div>
   )
 }
