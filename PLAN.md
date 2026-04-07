@@ -8,7 +8,7 @@
 | 2 | Base del frontend | ✅ Completo |
 | 3 | Visualizaciones nacionales | ✅ Completo |
 | 4 | Despliegue y CI/CD | ✅ Completo |
-| 5 | Visualizaciones CCAA | ⏳ Pendiente |
+| 5 | Visualizaciones CCAA | ✅ Completo |
 | 6 | Drill-down granular (gastos por función, impuestos por tipo) | ⏳ Pendiente |
 
 ### Dependencias entre fases
@@ -124,7 +124,7 @@ Fase 2 ──► Fase 3 ──► Fase 4
 ### Milestone 2.1 — Inicialización del proyecto ✅
 
 - [x] Vite 5 + React 18 + TypeScript; gestor de paquetes: `pnpm`
-- [x] Dependencias instaladas: `tailwindcss @tailwindcss/vite`, `echarts echarts-for-react`, `@duckdb/duckdb-wasm`, `zustand`, `react-router-dom`, `react-simple-maps`, `d3-scale d3-color d3-scale-chromatic`
+- [x] Dependencias instaladas: `tailwindcss @tailwindcss/vite`, `echarts echarts-for-react`, `@duckdb/duckdb-wasm`, `zustand`, `react-router-dom`, `d3-geo @types/d3-geo`, `d3-scale d3-color d3-scale-chromatic`
 - [x] `vite.config.ts`: `base: '/cuentas-publicas/'`, `optimizeDeps.exclude: ['@duckdb/duckdb-wasm']`, cabeceras COOP/COEP en dev server
 - [x] `coi-serviceworker.js` en `web/public/`
 - [x] `.duckdb` en `web/public/db/`
@@ -267,43 +267,60 @@ Fase 2 ──► Fase 3 ──► Fase 4
 
 ---
 
-## Fase 5: Visualizaciones CCAA ⏳
+## Fase 5: Visualizaciones CCAA ✅
 
 **Objetivo:** Mapa coroplético interactivo de transferencias y presupuestos autonómicos. Requiere Fase 1 completa y Fase 4 desplegada.
 
-### Milestone 5.1 — GeoJSON y componente ChoroplethMap
+### Milestone 5.1 — GeoJSON y componente ChoroplethMap ✅
 
-- [ ] Obtener y preparar GeoJSON de CCAA (`web/public/geo/ccaa.json`, < 200 KB, Canarias en recuadro)
-- [ ] Implementar `src/components/charts/ChoroplethMap.tsx`:
-  - `react-simple-maps` + `d3-scale scaleSequential` + `d3-scale-chromatic`
-  - Props: `data: Record<ccaa_cod, number>`, `domain`, `colorScheme`, `onSelect`, `selectedCcaa`, `tooltipFormatter`
-  - Tooltip en hover; borde destacado en CCAA seleccionada; leyenda de gradiente
-
----
-
-### Milestone 5.2 — Página Transferencias
-
-- [ ] `src/db/queries/ccaa.ts`: `getTransferenciasPorCcaa(year, fuente)`, `getTransferenciasSerie(ccaa_cod, fuente)`
-- [ ] `src/pages/Transferencias/index.tsx`:
-  - Layout: mapa (izq.) + tabla TanStack (dcha.), sincronizados por selección de CCAA
-  - Selector de variable: Total €, Per cápita, Corrientes, Capital, FCI, UE
-  - `ViewModeToggle` Plan / Ejecución
-  - Panel con `LineChart` histórico al seleccionar CCAA
+- [x] Obtener y preparar GeoJSON de CCAA (`web/public/geo/ccaa.json`):
+  - 19 features (17 CCAA + Ceuta + Melilla)
+  - Anillos corregidos: d3-geo v3 requiere convención CW (clockwise) para el anillo exterior; los polígonos con área ≥ 2π sr (interpretados como complemento esférico) se invierten automáticamente en el pipeline de preparación
+  - Sub-polígonos degenerados (< 6 puntos) eliminados para evitar área ≈ 4π
+- [x] Implementar `src/components/charts/ChoroplethMap.tsx`:
+  - **SVG puro con d3-geo** (sin react-simple-maps): `geoMercator().fitExtent(...)` desde la `FeatureCollection` cargada → proyección precisa y sin dependencias de terceros sobre el ciclo de vida de React
+  - Canarias desplazada +4° longitud / +7° latitud en tiempo de carga (convencion IGN/INE) para situarla en el recuadro inferior izquierdo junto a la Península
+  - Props: `data: Record<ccaa_cod, number>`, `colorScale`, `onSelect`, `selectedCcaa`, `formatValue`, `height`
+  - Tooltip via `createPortal` (evita recorte por `overflow:hidden`); borde destacado en CCAA seleccionada
+  - `ColorLegend` exportado como componente separado (gradiente horizontal con etiquetas min/max)
 
 ---
 
-### Milestone 5.3 — Página CCAA Overview
+### Milestone 5.2 — Página Transferencias ✅
 
-- [ ] `getCcaaResumen(year)`: ingresos, gastos, déficit, % ejecución por CCAA
-- [ ] `src/pages/CCAA/index.tsx`: mapa + tabla TanStack; clic navega a `/ccaa/:id`
+- [x] `src/db/queries/ccaa.ts`: `getTransferenciasPorCcaa(year, fuente)`, `getTransferenciasSerie(ccaa_cod, fuente)`, `getCcaaYears()`
+  - Todos los valores en K€ en origen → divididos entre 1000 en query para obtener M€
+  - `CAST(... AS DOUBLE)` aplicado para evitar bug DECIMAL×100 de DuckDB WASM
+- [x] `src/pages/Transferencias/index.tsx`:
+  - Año seleccionado gestionado **localmente** (no del store global) cargado desde `getCcaaYears()` → max disponible (2023); evita el desfase con el año global que puede ser 2025
+  - Layout: grid 5 columnas — mapa (3/5) + tabla de ranking (2/5)
+  - Toggle Plan / Ejecución integrado en la cabecera
+  - Panel `LineChart` (total / corrientes / capital) al seleccionar una CCAA
+  - Tabla de desglose corriente/capital al final de la página
 
 ---
 
-### Milestone 5.4 — Página CCAA Detalle
+### Milestone 5.3 — Página CCAA Overview ✅
 
-- [ ] `src/pages/CCAA/Detalle.tsx` (ruta `/ccaa/:id`):
-  - KPI cards + tres tabs: Ingresos / Gastos / Comparativa
-  - Mismo patrón visual que las páginas nacionales equivalentes
+- [x] `getCcaaResumen(year)`, `getCcaaGastosPorCapitulo(ccaa_cod, year)`, `getCcaaIngresosPorCapitulo(ccaa_cod, year)` en `ccaa.ts`
+- [x] `src/pages/CCAA/index.tsx`:
+  - Año local independiente del store global (mismo patrón que Transferencias)
+  - Selector de variable del mapa: gastos ejecutados / gastos planificados / déficit
+  - Panel de drill-down al seleccionar CCAA: `BarChart` agrupado (plan vs ejecución por capítulo), tanto gastos como ingresos
+  - Tabla comparativa completa: ingresos plan/ejec, gastos plan/ejec, déficit
+
+---
+
+### Milestone 5.4 — Página CCAA Detalle ✅
+
+- [x] `src/pages/CCAA/Detalle.tsx` (ruta `/ccaa/:cod`):
+  - Año local independiente del store global; cargado desde `getCcaaYears()`
+  - KPI cards: ingresos ejecutados, gastos ejecutados, saldo presupuestario (▲/▼), % ejecución del gasto
+  - 3 tabs:
+    - **Gastos**: BarChart horizontal agrupado (Plan/Ejecución) por capítulo + tabla con % ejecución; rojo si < 85%
+    - **Ingresos**: mismo patrón; columna % s/total de ingresos ejecutados
+    - **Plan vs. Ejecución**: BarChart vertical agrupado + tabla de desviación (M€ y %) con colores rojo/verde
+  - Enlace "← Volver a CCAA" y nombres de CCAA enlazados desde el overview
 
 ---
 

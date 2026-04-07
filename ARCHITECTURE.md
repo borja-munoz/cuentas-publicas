@@ -14,8 +14,9 @@
 │    sepg.py        ──┼──► db.py ──► .duckdb ───►│    │     └── Impuestos (detalle AEAT)     │
 │    ss.py          ──┤   (asset estático) │      │    ├── Gastos         (por capítulo)      │
 │    transfer_ccaa.py─┤                    │      │    ├── Comparativa    (plan vs ejecución)  │
-│    ccaa.py        ──┘                    │      │    ├── Transferencias (mapa — pendiente)   │
-│                                          │      │    └── CCAA           (mapa — pendiente)   │
+│    ccaa.py        ──┘                    │      │    ├── Transferencias (mapa coroplético)   │
+│                                          │      │    ├── CCAA           (overview)           │
+│                                          │      │    └── CCAA/:cod      (detalle por CCAA)   │
 │  GitHub Actions                          │      │                                           │
 │    → cron mensual: scraper + commit      │      │  DuckDB WASM (Web Worker)                 │
 │    → trigger: redeploy a GitHub Pages    │      │                                           │
@@ -61,7 +62,7 @@ cuentas-publicas/
 │   │   ├── db/
 │   │   │   └── cuentas-publicas.duckdb   # Generado por el scraper, servido estáticamente
 │   │   └── geo/
-│   │       └── ccaa.json                 # GeoJSON CCAA (para fase 5)
+│   │       └── ccaa.json                 # GeoJSON 19 CCAA; anillos CW corregidos; Canarias en pos. original
 │   └── src/
 │       ├── main.tsx
 │       ├── App.tsx                       # Router + AppShell
@@ -73,7 +74,8 @@ cuentas-publicas/
 │       │   └── queries/
 │       │       ├── ingresos.ts           # Queries ingresos + CAPITULO_INGRESOS_TOOLTIP
 │       │       ├── gastos.ts             # Queries gastos + CAPITULO_GASTOS_TOOLTIP
-│       │       └── aeat.ts              # Queries recaudación AEAT + IMPUESTO_COLORS
+│       │       ├── aeat.ts              # Queries recaudación AEAT + IMPUESTO_COLORS
+│       │       └── ccaa.ts              # Queries CCAA: transferencias, resumen, capítulos
 │       ├── store/
 │       │   └── filters.ts               # Zustand: selectedYear, entityType, viewMode
 │       ├── components/
@@ -85,7 +87,8 @@ cuentas-publicas/
 │       │   │   └── ViewModeToggle.tsx    # Plan / Ejecución
 │       │   ├── charts/
 │       │   │   ├── BarChart.tsx          # ECharts barras (simple, apiladas, agrupadas, horizontal)
-│       │   │   └── LineChart.tsx         # ECharts líneas multi-serie (series temporales)
+│       │   │   ├── LineChart.tsx         # ECharts líneas multi-serie (series temporales)
+│       │   │   └── ChoroplethMap.tsx     # Mapa SVG puro d3-geo + ColorLegend (ver sección abajo)
 │       │   └── ui/
 │       │       ├── KpiCard.tsx           # Tarjeta KPI (valor + variación ▲/▼, estilo Economist)
 │       │       ├── LoadingSkeleton.tsx   # Placeholder animado + ChartSkeleton
@@ -99,7 +102,11 @@ cuentas-publicas/
 │           │   ├── index.tsx             # Barras por capítulo + línea histórica + tabla
 │           │   └── Impuestos.tsx         # Líneas IRPF/IVA/Sociedades (1995–2024) + tabla
 │           ├── Gastos/index.tsx          # Barras por capítulo + líneas históricas + tabla
-│           └── Comparativa/index.tsx     # Barras plan vs ejecución + tabla desviación
+│           ├── Comparativa/index.tsx     # Barras plan vs ejecución + tabla desviación
+│           ├── Transferencias/index.tsx  # Mapa coroplético + ranking + serie histórica
+│           └── CCAA/
+│               ├── index.tsx             # Overview: mapa + drill-down por capítulo + tabla
+│               └── Detalle.tsx           # Detalle CCAA: KPIs + tabs Gastos/Ingresos/Comparativa
 │
 ├── .github/
 │   └── workflows/
@@ -306,7 +313,7 @@ GROUP BY ALL;
 | DB cliente | @duckdb/duckdb-wasm | latest |
 | Estado global | Zustand | 4 |
 | Routing | React Router | v6 |
-| Mapa coroplético (fase 5) | react-simple-maps + d3-scale + d3-scale-chromatic | 3 |
+| Mapa coroplético | d3-geo + d3-scale + d3-scale-chromatic (SVG puro) | 3 |
 | Headers fix | coi-serviceworker | — |
 
 ---
@@ -336,6 +343,24 @@ Los valores de `obligaciones_reconocidas` en `gastos_ejecucion` están en **K€
 ### InfoTooltip
 
 Renderiza mediante `createPortal` en `document.body` con `position: fixed`, evitando recorte por `overflow: hidden/auto` de la tabla. La posición (arriba/abajo del botón) se calcula con `getBoundingClientRect()` en el momento de mostrar.
+
+### ChoroplethMap — Mapa SVG puro
+
+`ChoroplethMap.tsx` usa **d3-geo directamente** (no react-simple-maps). Motivo: react-simple-maps no permite pasar una proyección d3 ya construida sin casts inseguros, lo que producía escala incorrecta.
+
+**Pipeline de renderizado:**
+1. Se carga `public/geo/ccaa.json` con `fetch` al montar el componente
+2. Las coordenadas de Canarias (`ccaa_cod === 'CN'`) se desplazan `+4° longitud / +7° latitud` en el callback del fetch, antes de guardar en estado. Esto sitúa Canarias en un recuadro visible junto a la Península, siguiendo la convención IGN/INE.
+3. `useMemo` construye `geoMercator().fitExtent([[20,20],[W-20,H-20]], geoData)` a partir de la `FeatureCollection` completa (Canarias ya desplazada incluida). Así los límites de la proyección abarcan todo el territorio visible.
+4. Cada `<path>` SVG recibe `fill` calculado con `colorScale(data[ccaa_cod])` (d3-scale `scaleSequential`).
+5. El tooltip usa `createPortal` sobre `document.body` para evitar recorte.
+
+**Convención de anillos GeoJSON (winding):**
+d3-geo v3 requiere anillos exteriores en sentido horario (CW) para la geometría esférica. El GeoJSON estándar es CCW. Los polígonos con winding incorrecto son interpretados como el complemento de la región (mundo menos España), lo que produce `geoArea ≈ 4π sr` y `fitExtent` calcula escala ≈ 82 en lugar de ≈ 1488. El fichero `ccaa.json` tiene los anillos ya corregidos.
+
+**Datos CCAA — unidades y años:**
+- `ccaa_gastos`, `ccaa_ingresos`, `transferencias_ccaa`: almacenan importes en **K€**. Todas las queries dividen entre 1000 para obtener M€.
+- Cobertura temporal: 2002–2023. Las páginas CCAA mantienen su propio `selectedYear` local inicializado al máximo disponible (actualmente 2023), independiente del `selectedYear` global del store Zustand (que puede alcanzar 2025 por los datos de `gastos_plan`).
 
 ---
 
@@ -369,6 +394,9 @@ export interface Insight {
 | Gastos | Peso transferencias corrientes (cap 4) · Variación YoY · Gasto en personal |
 | Impuestos (AEAT) | Variación recaudación YoY · Ratio devoluciones IVA · Máximo histórico |
 | Comparativa | Tasa de ejecución global · Crédito no ejecutado · Capítulo menos ejecutado |
+| Transferencias | Mayor receptora · Total nacional · % corrientes vs capital |
+| CCAA Overview | CCAA con mayor gasto · Mayor déficit · Tasa de ejecución media |
+| CCAA Detalle | — (KPI cards integrados en la cabecera; sin InsightsPanel) |
 
 ### Layout estándar de página
 

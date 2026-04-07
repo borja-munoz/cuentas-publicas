@@ -12,6 +12,7 @@ import Gastos from './pages/Gastos'
 import Comparativa from './pages/Comparativa'
 import Transferencias from './pages/Transferencias'
 import CCAA from './pages/CCAA'
+import CcaaDetalle from './pages/CCAA/Detalle'
 
 function DBInitializer({ onReady }: { onReady: () => void }) {
   const initYears = useFilters((s) => s.initYears)
@@ -67,6 +68,7 @@ export default function App() {
             <Route path="comparativa" element={<Comparativa />} />
             <Route path="transferencias" element={<Transferencias />} />
             <Route path="ccaa" element={<CCAA />} />
+            <Route path="ccaa/:cod" element={<CcaaDetalle />} />
           </Route>
         </Routes>
       </BrowserRouter>
