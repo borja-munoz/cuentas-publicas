@@ -10,6 +10,12 @@
 | 4 | Despliegue y CI/CD | ✅ Completo |
 | 5 | Visualizaciones CCAA | ✅ Completo |
 | 6 | Drill-down granular (gastos por función, impuestos por tipo) | ✅ Completo (6.3 IRPF tramos diferido) |
+| 7 | Rediseño visual (paleta editorial + cabecera sticky) | ⏳ Pendiente |
+| 8 | Reorganización por ámbito (Global / Estado / CCAA / SS) | ⏳ Pendiente |
+| 9 | Datos consolidados AAPP (IGAE SEC2010 + PIB) | ⏳ Pendiente |
+| 10 | Sección Deuda (stock, intereses, emisiones, tenedores) | ⏳ Pendiente |
+
+> **Protocolo por fase** — cada fase abre con un milestone de **diseño en ARCHITECTURE.md** y cierra con un milestone de **verificación + cierre** (repasar entregables, actualizar ARCHITECTURE.md si hubo desviaciones, marcar la fase ✅). Ver `CLAUDE.md` → *Workflow por fase*.
 
 ### Dependencias entre fases
 
@@ -19,6 +25,12 @@ Fase 1 (Scraper) ─────────────────────
                    ──► Fase 2.1–2.4 puede avanzar en paralelo con datos mock
 Fase 2 ──► Fase 3 ──► Fase 4
                    └──► Fase 5 (requiere Fase 4 desplegada y Fase 1 con tablas CCAA)
+
+Fase 7 (paleta + sticky) ──┐
+                           ├──► Fase 8 (reorganización rutas)
+Fase 9 (datos AAPP) ───────┤     (F8 necesita F9 para no dejar /aapp/* vacío)
+Fase 10 (datos deuda) ─────┘
+F9 y F10 pueden avanzar en paralelo con F7.
 ```
 
 ---
@@ -496,6 +508,259 @@ Fase 1 (datos base) ──► Fase 6.1 (amplía scrapers SEPG/IGAE)
 Fase 3 (páginas base) ──► Fase 6 (añade drill-down sobre páginas existentes)
 Fase 4 (despliegue) ──► necesario antes de publicar Fase 6
 ```
+
+---
+
+## Fase 7: Rediseño visual ⏳
+
+**Objetivo:** Dar al sitio un aspecto más editorial (tipo NYT Upshot / Economist) y mover los controles de filtro a una cabecera sticky, de modo que la sidebar quede solo para navegación.
+
+### Milestone 7.0 — Diseño en ARCHITECTURE.md ⏳
+
+- [ ] Documentar en `ARCHITECTURE.md`:
+  - Tokens de la nueva paleta (valores hex, uso semántico de cada rol: `accent`, `accentAlt`, `neutrals`, `bg`, `positive`/`negative`, `categoricalPalette`).
+  - Contrato del componente `TopBar` + mecanismo `pageFilters` del store (qué controles muestra cada página).
+  - Nuevo árbol de componentes del layout (`AppShell` sin selectores, `TopBar` sticky, sidebar solo navegación).
+
+### Milestone 7.1 — Tokens de paleta editorial ⏳
+
+- [ ] Crear `web/src/utils/colors.ts` con la paleta tokenizada:
+  - `accent`: `#B82A2A` (rojo editorial, primario)
+  - `accentAlt`: `#C89B3C` (ocre — usado para ejecución vs plan)
+  - `neutrals`: `#2A2A2A` (texto), `#6B7280` (texto secundario), `#D4D4D4` (líneas)
+  - `bg`: `#FAF7F2` (crema papel)
+  - `positive`: `#1F7A3D`, `negative`: `#B82A2A`
+  - `categoricalPalette[]`: 5 colores para series (rojo + ocre + 3 neutros contrastados)
+- [ ] Actualizar `--color-accent`, `--color-accent-dark` y añadir `--color-bg-paper` en `web/src/index.css`.
+- [ ] Extender el tema Tailwind v4 con las nuevas variables.
+- [ ] Reemplazar todos los `#326891`, `#e07b39` y clases `blue-*` de Tailwind en:
+  - `web/src/components/ui/KpiCard.tsx`
+  - Charts: `BarChart.tsx`, `LineChart.tsx`, `ChoroplethMap.tsx`
+  - `IMPUESTO_COLORS` en `web/src/db/queries/aeat.ts`
+  - Toggles y botones: `ViewModeToggle.tsx`, páginas Transferencias/CCAA
+- [ ] Verificación: `grep -r "326891\|e07b39\|blue-600\|blue-700" web/src/` debe devolver 0 coincidencias.
+
+### Milestone 7.2 — Cabecera sticky ⏳
+
+- [ ] Crear `web/src/components/layout/TopBar.tsx`: cabecera `position: sticky; top: 0` con `ScopeSelector` + `YearSelector` + `ViewModeToggle`; oculta los controles no aplicables a la página actual.
+- [ ] Refactor `AppShell.tsx`: sidebar solo con navegación (sin `YearSelector` ni entity toggle); hueco reservado para TopBar.
+- [ ] Añadir `pageFilters` en `web/src/store/filters.ts` (p.ej. `{ showScope: boolean, showViewMode: boolean }`) para que cada página declare qué controles necesita.
+- [ ] Adaptar responsive: en móvil la TopBar se compacta (selectores colapsados en un botón).
+
+### Milestone 7.3 — Cierre de fase ⏳
+
+- [ ] Repasar los `[ ]` de 7.0–7.2; todos marcados.
+- [ ] `grep -r "326891\|e07b39\|blue-600\|blue-700" web/src/` → 0 coincidencias.
+- [ ] Revisar visualmente todas las páginas existentes — sin regresiones.
+- [ ] Si hubo desviaciones del diseño, actualizar `ARCHITECTURE.md`.
+- [ ] Marcar Fase 7 como ✅ en el resumen de fases y en la cabecera.
+
+---
+
+## Fase 8: Reorganización por ámbito ⏳
+
+**Objetivo:** Pasar de la navegación actual "Ingresos/Gastos/Comparativa/..." a una estructura **por ámbito**: Global (AAPP) / Estado / CCAA / SS. Dentro de cada ámbito: Ingresos, Gastos, Deuda. Plan vs Ejecución se integra como un 3er modo (`'comparativa'`) dentro de Ingresos y Gastos — la página `/comparativa` desaparece.
+
+### Milestone 8.0 — Diseño en ARCHITECTURE.md ⏳
+
+- [ ] Documentar en `ARCHITECTURE.md`:
+  - Nuevo modelo del store (`scopeType` reemplaza a `entityType`; `viewMode` con 3 valores).
+  - Árbol de rutas completo tras la reorganización.
+  - Mapa de redirects desde las rutas antiguas.
+  - Cómo se integra la Comparativa como 3er modo del toggle en Ingresos y Gastos.
+  - Nuevo contrato de Inicio (dashboard AAPP consolidado).
+
+### Milestone 8.1 — Store y routing ⏳
+
+- [ ] Ampliar Zustand `web/src/store/filters.ts`:
+  - `scopeType: 'AAPP' | 'Estado' | 'CCAA' | 'SS'` (reemplaza `entityType`).
+  - Extender `viewMode` a 3 valores: `'plan' | 'ejecucion' | 'comparativa'`.
+- [ ] Nuevo árbol de rutas en `web/src/App.tsx`:
+  ```
+  /                          → InicioAAPP (dashboard consolidado)
+  /aapp/ingresos             → AAPP ingresos por naturaleza
+  /aapp/ingresos/impuestos   → (actual /ingresos/impuestos, AEAT = AAPP)
+  /aapp/ingresos/iva         → (actual /ingresos/impuestos/iva)
+  /aapp/gastos               → AAPP gastos por naturaleza
+  /aapp/gastos/funcion       → (actual /gastos/funcion, COFOG S13)
+  /aapp/deuda                → Deuda AAPP
+  /estado/ingresos           → (actual /ingresos + toggle plan/ejec/comparativa)
+  /estado/gastos             → (actual /gastos + toggle plan/ejec/comparativa)
+  /estado/deuda              → Deuda del Estado + emisiones Tesoro
+  /ccaa                      → CCAA overview (mapa, comparativa)
+  /ccaa/:cod                 → Detalle CCAA
+  /ccaa/transferencias       → (actual /transferencias)
+  /ccaa/deuda                → Deuda CCAA + ranking
+  /ss/ingresos               → SS ingresos por capítulo
+  /ss/gastos                 → SS gastos por capítulo
+  /ss/gastos/pensiones       → (actual /gastos/pensiones)
+  /ss/deuda                  → Deuda SS
+  ```
+- [ ] Redirects desde rutas antiguas (`/ingresos/*`, `/gastos/*`, `/comparativa`, `/transferencias`) a las nuevas para no romper enlaces externos.
+
+### Milestone 8.2 — Integrar Comparativa dentro de Ingresos y Gastos ⏳
+
+- [ ] Eliminar `/comparativa` como página top-level.
+- [ ] En cada página Ingresos/Gastos (Estado, CCAA, SS) añadir 3 modos por toggle:
+  - **Plan**: vista actual con `fuente='plan'`.
+  - **Ejecución**: vista con `fuente='ejecucion'`.
+  - **Plan vs Ejecución**: BarChart agrupado (Plan/Ejecución) + tabla de desviación (la lógica actual de `Comparativa/index.tsx`, generalizada para ingresos y gastos).
+- [ ] Reutilizar `getComparativaPorCapitulo` como patrón; crear `getIngresosComparativaPorCapitulo` análogo en `web/src/db/queries/ingresos.ts`.
+- [ ] Para **Global (AAPP)** los datos SEC2010 son solo ejecución → la TopBar oculta el toggle en esas páginas.
+
+### Milestone 8.3 — Inicio AAPP ⏳
+
+- [ ] Reescribir `web/src/pages/Inicio/index.tsx` con datos consolidados (requiere F9):
+  - KPIs: ingresos totales AAPP, gastos totales AAPP, saldo (% PIB), deuda pública (% PIB).
+  - LineChart multi-serie: ingresos vs gastos AAPP 1995–actual.
+  - Tarjetas con enlaces a los 4 ámbitos (cada una con 1–2 métricas resumen).
+
+### Milestone 8.4 — Cierre de fase ⏳
+
+- [ ] Repasar los `[ ]` de 8.0–8.3; todos marcados.
+- [ ] Probar en navegador cada una de las rutas nuevas (entra en todas, verifica que cargan).
+- [ ] Probar los redirects desde las rutas antiguas (al menos una por bloque).
+- [ ] Probar los 3 modos del toggle (Plan / Ejecución / Plan vs Ejecución) en Estado, CCAA y SS.
+- [ ] Verificar que en `/aapp/*` el toggle Plan/Ejecución está oculto.
+- [ ] Si hubo desviaciones del diseño, actualizar `ARCHITECTURE.md`.
+- [ ] Marcar Fase 8 como ✅ en el resumen de fases y en la cabecera.
+
+---
+
+## Fase 9: Datos consolidados AAPP (IGAE SEC2010) ⏳
+
+**Objetivo:** Incorporar las cuentas consolidadas de las Administraciones Públicas (SEC2010) y el PIB, para alimentar las páginas `/aapp/*` y los KPIs de Inicio y Deuda.
+
+### Milestone 9.0 — Diseño en ARCHITECTURE.md ⏳
+
+- [ ] Documentar en `ARCHITECTURE.md`:
+  - Esquema de las 3 tablas nuevas (`aapp_ingresos`, `aapp_gastos`, `pib_anual`) con columnas, claves y unidades.
+  - Mapeo de los códigos Eurostat (`gov_10a_main` NA_ITEM → `concepto` canónico; subsectores `S13*`).
+  - Añadir filas en la tabla "Fuentes de Datos" (Eurostat `gov_10a_main`, `nama_10_gdp`, IGAE Contabilidad Nacional).
+  - Notas: publicación SEC2010 anual, revisiones hacia atrás, moneda y deflactor.
+
+### Milestone 9.1 — Scraper IGAE SEC2010 + PIB ⏳
+
+- [ ] Fuente principal: **Eurostat `gov_10a_main`** (JSON-stat, SEC2010, cobertura 1995–actual; misma API REST que `gov_10a_exp` ya usada en `igae_cofog.py`).
+- [ ] Fuente complementaria: **IGAE Contabilidad Nacional** (publicación ministerial anual, Excel). Útil si Eurostat se retrasa respecto al cierre español.
+- [ ] PIB: **Eurostat `nama_10_gdp`** (precios corrientes, nacional, M€).
+- [ ] Crear `scraper/src/scraper/scrapers/igae_sec2010.py` y `transform/igae_sec2010.py` siguiendo el patrón de `igae_cofog.py` (parseo JSON-stat con strides).
+- [ ] Crear `scraper/src/scraper/scrapers/pib.py` (puede vivir en el mismo módulo `igae_sec2010.py`).
+
+### Milestone 9.2 — Esquema de tablas ⏳
+
+```sql
+CREATE TABLE aapp_ingresos (
+    year          INTEGER NOT NULL,
+    subsector     VARCHAR NOT NULL,   -- 'S13','S1311','S1312','S1313','S1314'
+    concepto      VARCHAR NOT NULL,   -- 'impuestos_produccion','impuestos_renta','cotizaciones',
+                                      -- 'ventas','transferencias','rentas_propiedad','otros'
+    concepto_nom  VARCHAR NOT NULL,
+    importe       DECIMAL(18,2),      -- M€
+    PRIMARY KEY (year, subsector, concepto)
+);
+
+CREATE TABLE aapp_gastos (
+    year          INTEGER NOT NULL,
+    subsector     VARCHAR NOT NULL,
+    concepto      VARCHAR NOT NULL,   -- 'remuneracion_empleados','consumos_intermedios',
+                                      -- 'prestaciones_sociales','intereses','subvenciones',
+                                      -- 'transferencias_capital','fbcf','otros'
+    concepto_nom  VARCHAR NOT NULL,
+    importe       DECIMAL(18,2),
+    PRIMARY KEY (year, subsector, concepto)
+);
+
+CREATE TABLE pib_anual (
+    year  INTEGER PRIMARY KEY,
+    pib   DECIMAL(18,2)              -- M€ a precios corrientes
+);
+```
+
+### Milestone 9.3 — Páginas y queries AAPP ⏳
+
+- [ ] `web/src/db/queries/aapp.ts`: `getAappIngresos(year, subsector)`, `getAappGastos(year, subsector)`, `getAappResumen(year)`, `getPibAnual()`.
+- [ ] `web/src/pages/AAPP/Ingresos.tsx`: BarChart horizontal por concepto, LineChart histórico multi-concepto, tabla con importe y % PIB.
+- [ ] `web/src/pages/AAPP/Gastos.tsx`: idem. Enlace a COFOG (drill-down funcional) que ya existe.
+- [ ] `web/src/pages/AAPP/Deuda.tsx`: placeholder (se rellena en F10).
+- [ ] InsightsPanel: peso de cotizaciones, % ingresos impositivos, peso de prestaciones sociales, etc.
+
+### Milestone 9.4 — Cierre de fase ⏳
+
+- [ ] Repasar los `[ ]` de 9.0–9.3; todos marcados.
+- [ ] Verificar en DuckDB que `aapp_ingresos`, `aapp_gastos`, `pib_anual` tienen filas esperadas (años × subsectores × conceptos).
+- [ ] Verificar que los agregados cuadran con cifras oficiales publicadas (sanity check de 1–2 años).
+- [ ] Páginas `/aapp/ingresos` y `/aapp/gastos` funcionando con datos reales.
+- [ ] Si hubo desviaciones del diseño, actualizar `ARCHITECTURE.md`.
+- [ ] Marcar Fase 9 como ✅ en el resumen de fases y en la cabecera.
+
+---
+
+## Fase 10: Sección Deuda ⏳
+
+**Objetivo:** Añadir la tercera pata de las cuentas públicas: evolución del stock de deuda, ratio/PIB, intereses, emisiones brutas/netas del Tesoro y desglose por tenedores.
+
+### Milestone 10.0 — Diseño en ARCHITECTURE.md ⏳
+
+- [ ] Documentar en `ARCHITECTURE.md`:
+  - Esquema de las 3 tablas nuevas (`deuda_pde`, `deuda_emisiones`, `deuda_tenedores`) con columnas, claves y unidades.
+  - Fuentes y método de extracción para cada una (Eurostat `gov_10dd_edpt1`, BdE SPAM, Tesoro, BdE Tenedores).
+  - Rutas nuevas `/aapp/deuda`, `/estado/deuda`, `/ccaa/deuda`, `/ss/deuda` con el contenido previsto de cada una.
+  - Nota sobre PIB autonómico para el ranking CCAA (fuente y tabla).
+  - Añadir filas correspondientes en la tabla "Fuentes de Datos".
+
+### Milestone 10.1 — Scraper y tablas ⏳
+
+- [ ] Fuentes:
+  - **Stock deuda PDE**: Eurostat `gov_10dd_edpt1` (anual, por subsector). Complemento: BdE Síntesis SPAM para serie trimestral.
+  - **Intereses**: ya capturados en `aapp_gastos` con `concepto='intereses'` (F9) + IGAE capítulo 3 como referencia cruzada.
+  - **Emisiones Tesoro**: datos.gob.es "Estrategia del Tesoro" o scraping del informe anual del Tesoro.
+  - **Tenedores**: BdE — "Tenedores de deuda del Estado" (Excel mensual).
+  - **PIB**: ya en `pib_anual` (F9).
+- [ ] Crear `scraper/src/scraper/scrapers/deuda.py` con submódulos por fuente.
+- [ ] Nuevas tablas:
+  ```sql
+  CREATE TABLE deuda_pde (
+      year       INTEGER NOT NULL,
+      subsector  VARCHAR NOT NULL,   -- 'S13','S1311','S1312','S1313','S1314'
+      importe    DECIMAL(18,2),      -- M€
+      PRIMARY KEY (year, subsector)
+  );
+
+  CREATE TABLE deuda_emisiones (
+      year       INTEGER PRIMARY KEY,
+      bruta      DECIMAL(18,2),      -- emisión bruta M€
+      neta       DECIMAL(18,2),      -- neta (bruta - vencimientos)
+      vida_media DECIMAL(6,2)        -- años
+  );
+
+  CREATE TABLE deuda_tenedores (
+      year       INTEGER NOT NULL,
+      month      INTEGER DEFAULT 0,  -- 0 = media anual
+      categoria  VARCHAR NOT NULL,   -- 'residentes','no_residentes','bce','sector_privado',...
+      importe    DECIMAL(18,2),      -- M€
+      pct_total  DECIMAL(6,3),
+      PRIMARY KEY (year, month, categoria)
+  );
+  ```
+
+### Milestone 10.2 — Páginas Deuda por ámbito ⏳
+
+- [ ] `web/src/pages/AAPP/Deuda.tsx`: evolución stock (1995–actual), ratio/PIB, área apilada por subsector, intereses (% PIB), tenedores (donut + evolución temporal).
+- [ ] `web/src/pages/Estado/Deuda.tsx`: deuda `S1311` + emisiones brutas/netas del Tesoro + vida media + KPI "cuánto vence este año".
+- [ ] `web/src/pages/CCAA/Deuda.tsx`: ranking CCAA por deuda/PIB autonómico, mapa coroplético (reutilizar `ChoroplethMap`).
+- [ ] `web/src/pages/SS/Deuda.tsx`: deuda SS (pequeña, serie corta), con contexto sobre el fondo de reserva.
+- [ ] `web/src/db/queries/deuda.ts`: queries correspondientes.
+- [ ] InsightsPanel: ratio actual vs máximo histórico, carga de intereses vs gasto en educación, etc.
+
+### Milestone 10.3 — Cierre de fase ⏳
+
+- [ ] Repasar los `[ ]` de 10.0–10.2; todos marcados.
+- [ ] Verificar en DuckDB que `deuda_pde`, `deuda_emisiones`, `deuda_tenedores` tienen filas esperadas.
+- [ ] Ratio deuda/PIB del último año disponible cuadra con cifras oficiales (BdE/Eurostat).
+- [ ] Las 4 páginas (`/aapp/deuda`, `/estado/deuda`, `/ccaa/deuda`, `/ss/deuda`) cargan con datos reales.
+- [ ] Si hubo desviaciones del diseño, actualizar `ARCHITECTURE.md`.
+- [ ] Marcar Fase 10 como ✅ en el resumen de fases y en la cabecera.
 
 ---
 
