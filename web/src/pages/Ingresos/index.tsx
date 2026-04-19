@@ -21,8 +21,13 @@ import { formatEur, formatPct } from '../../utils/format'
 import type { Insight } from '../../utils/insights'
 
 export default function Ingresos() {
-  const { selectedYear, entityType, viewMode } = useFilters()
+  const { selectedYear, entityType, viewMode, setPageFilters } = useFilters()
   const fuente = viewMode === 'ejecucion' ? 'ejecucion' : 'plan'
+
+  useEffect(() => {
+    setPageFilters({ showViewMode: true })
+    return () => setPageFilters({ showViewMode: false })
+  }, [setPageFilters])
 
   const [caps, setCaps] = useState<IngresosAnuales[]>([])
   const [historico, setHistorico] = useState<TotalAnual[]>([])
@@ -172,7 +177,7 @@ export default function Ingresos() {
                 {
                   name: 'Ingresos',
                   data: barData,
-                  color: '#326891',
+                  color: '#B82A2A',
                 },
               ]}
               height={280}
@@ -198,7 +203,7 @@ export default function Ingresos() {
           ) : (
             <LineChart
               categories={histYears}
-              series={[{ name: 'Ingresos', data: histData, color: '#326891' }]}
+              series={[{ name: 'Ingresos', data: histData, color: '#B82A2A' }]}
               height={260}
               smooth
             />

@@ -7,9 +7,9 @@ export const IVA_TIPO_LABELS: Record<string, string> = {
 }
 
 export const IVA_TIPO_COLORS: Record<string, string> = {
-  general:      '#326891',
-  reducido:     '#5a9ab0',
-  superreducido: '#e07b39',
+  general:       '#B82A2A',
+  reducido:      '#C89B3C',
+  superreducido: '#5C6F7E',
 }
 
 export interface IvaTipo {

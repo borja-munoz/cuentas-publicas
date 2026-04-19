@@ -183,7 +183,7 @@ export default function IvaTipos() {
               {
                 name: 'Cuota devengada',
                 data: barCuotaData,
-                color: barColors[0] ?? '#326891',
+                color: barColors[0] ?? '#B82A2A',
               },
             ]}
             height={260}

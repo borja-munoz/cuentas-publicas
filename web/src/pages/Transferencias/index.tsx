@@ -32,7 +32,7 @@ function FuenteToggle({
           key={f}
           onClick={() => onChange(f)}
           className={`px-3 py-1.5 capitalize transition-colors ${
-            fuente === f ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-50'
+            fuente === f ? 'bg-[var(--color-accent)] text-white' : 'text-[var(--color-ink-muted)] hover:bg-gray-50'
           }`}
         >
           {f === 'plan' ? 'Plan' : 'Ejecución'}
@@ -225,8 +225,8 @@ export default function Transferencias() {
                   rows.map((r) => (
                     <tr
                       key={r.ccaa_cod}
-                      className={`cursor-pointer transition-colors hover:bg-blue-50/50 ${
-                        selectedCcaa === r.ccaa_cod ? 'bg-blue-50' : ''
+                      className={`cursor-pointer transition-colors hover:bg-[var(--color-accent)]/5 ${
+                        selectedCcaa === r.ccaa_cod ? 'bg-[var(--color-accent)]/10' : ''
                       }`}
                       onClick={() =>
                         setSelectedCcaa((prev) => (prev === r.ccaa_cod ? null : r.ccaa_cod))
@@ -284,18 +284,18 @@ export default function Transferencias() {
                   {
                     name: 'Total',
                     data: serie.map((s) => s.total),
-                    color: '#326891',
+                    color: '#B82A2A',
                   },
                   {
                     name: 'Corrientes',
                     data: serie.map((s) => s.corriente),
-                    color: '#5a9ab0',
+                    color: '#C89B3C',
                     dashed: true,
                   },
                   {
                     name: 'Capital',
                     data: serie.map((s) => s.capital),
-                    color: '#e07b39',
+                    color: '#5C6F7E',
                     dashed: true,
                   },
                 ]}

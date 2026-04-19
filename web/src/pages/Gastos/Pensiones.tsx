@@ -229,7 +229,7 @@ export default function Pensiones() {
               {
                 name: 'Importe total (M€)',
                 data: sortedRows.map((r) => r.importe_total),
-                color: '#326891',
+                color: '#B82A2A',
               },
             ]}
             horizontal

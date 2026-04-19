@@ -18,13 +18,13 @@ export interface RecaudacionAnual {
 export const IMPUESTOS_PRINCIPALES = ['IRPF', 'IVA', 'Sociedades', 'Especiales', 'Aduanas']
 
 export const IMPUESTO_COLORS: Record<string, string> = {
-  IRPF: '#326891',
-  IVA: '#5a9ab0',
-  Sociedades: '#e07b39',
-  Especiales: '#2d6a4f',
-  Aduanas: '#8b6e45',
-  'No Residentes': '#999999',
-  Otros: '#bbbbbb',
+  IRPF:           '#B82A2A',
+  IVA:            '#C89B3C',
+  Sociedades:     '#5C6F7E',
+  Especiales:     '#7E9E8B',
+  Aduanas:        '#8B6B7A',
+  'No Residentes': '#9A6B3C',
+  Otros:          '#999999',
 }
 
 // Serie histórica de recaudación anual por impuesto (month=0 → total anual)

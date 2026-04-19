@@ -1,6 +1,7 @@
 import { useRef } from 'react'
 import ReactECharts from 'echarts-for-react'
 import { formatEur } from '../../utils/format'
+import { CATEGORICAL } from '../../utils/colors'
 
 export interface TreemapNode {
   name: string
@@ -15,9 +16,8 @@ interface TreemapChartProps {
 }
 
 const PALETTE = [
-  '#326891', '#5a9ab0', '#e07b39', '#2d6a4f', '#8b6e45',
-  '#7eb8d0', '#c0392b', '#999999', '#6b7280', '#dc2626',
-  '#d97706', '#16a34a', '#059669', '#0891b2', '#2563eb',
+  ...CATEGORICAL,
+  '#dc2626', '#d97706', '#16a34a', '#059669', '#0891b2',
   '#7c3aed', '#c026d3', '#db2777', '#ea580c', '#ca8a04',
   '#4d7c0f', '#0f766e', '#0369a1', '#4338ca', '#7e22ce',
   '#be185d', '#b45309', '#15803d',

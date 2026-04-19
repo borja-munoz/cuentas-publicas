@@ -163,8 +163,8 @@ export default function Inicio() {
             <LineChart
               categories={years}
               series={[
-                { name: 'Ingresos', data: seriesIngresos, color: '#326891' },
-                { name: 'Gastos', data: seriesGastos, color: '#e07b39' },
+                { name: 'Ingresos', data: seriesIngresos, color: '#B82A2A' },
+                { name: 'Gastos', data: seriesGastos, color: '#C89B3C' },
               ]}
               height={300}
               smooth

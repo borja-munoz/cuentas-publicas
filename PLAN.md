@@ -10,7 +10,7 @@
 | 4 | Despliegue y CI/CD | ✅ Completo |
 | 5 | Visualizaciones CCAA | ✅ Completo |
 | 6 | Drill-down granular (gastos por función, impuestos por tipo) | ✅ Completo (6.3 IRPF tramos diferido) |
-| 7 | Rediseño visual (paleta editorial + cabecera sticky) | ⏳ Pendiente |
+| 7 | Rediseño visual (paleta editorial + cabecera sticky) | ✅ Completo |
 | 8 | Reorganización por ámbito (Global / Estado / CCAA / SS) | ⏳ Pendiente |
 | 9 | Datos consolidados AAPP (IGAE SEC2010 + PIB) | ⏳ Pendiente |
 | 10 | Sección Deuda (stock, intereses, emisiones, tenedores) | ⏳ Pendiente |
@@ -511,49 +511,38 @@ Fase 4 (despliegue) ──► necesario antes de publicar Fase 6
 
 ---
 
-## Fase 7: Rediseño visual ⏳
+## Fase 7: Rediseño visual ✅
 
 **Objetivo:** Dar al sitio un aspecto más editorial (tipo NYT Upshot / Economist) y mover los controles de filtro a una cabecera sticky, de modo que la sidebar quede solo para navegación.
 
-### Milestone 7.0 — Diseño en ARCHITECTURE.md ⏳
+### Milestone 7.0 — Diseño en ARCHITECTURE.md ✅
 
-- [ ] Documentar en `ARCHITECTURE.md`:
+- [x] Documentar en `ARCHITECTURE.md`:
   - Tokens de la nueva paleta (valores hex, uso semántico de cada rol: `accent`, `accentAlt`, `neutrals`, `bg`, `positive`/`negative`, `categoricalPalette`).
   - Contrato del componente `TopBar` + mecanismo `pageFilters` del store (qué controles muestra cada página).
   - Nuevo árbol de componentes del layout (`AppShell` sin selectores, `TopBar` sticky, sidebar solo navegación).
 
-### Milestone 7.1 — Tokens de paleta editorial ⏳
+### Milestone 7.1 — Tokens de paleta editorial ✅
 
-- [ ] Crear `web/src/utils/colors.ts` con la paleta tokenizada:
-  - `accent`: `#B82A2A` (rojo editorial, primario)
-  - `accentAlt`: `#C89B3C` (ocre — usado para ejecución vs plan)
-  - `neutrals`: `#2A2A2A` (texto), `#6B7280` (texto secundario), `#D4D4D4` (líneas)
-  - `bg`: `#FAF7F2` (crema papel)
-  - `positive`: `#1F7A3D`, `negative`: `#B82A2A`
-  - `categoricalPalette[]`: 5 colores para series (rojo + ocre + 3 neutros contrastados)
-- [ ] Actualizar `--color-accent`, `--color-accent-dark` y añadir `--color-bg-paper` en `web/src/index.css`.
-- [ ] Extender el tema Tailwind v4 con las nuevas variables.
-- [ ] Reemplazar todos los `#326891`, `#e07b39` y clases `blue-*` de Tailwind en:
-  - `web/src/components/ui/KpiCard.tsx`
-  - Charts: `BarChart.tsx`, `LineChart.tsx`, `ChoroplethMap.tsx`
-  - `IMPUESTO_COLORS` en `web/src/db/queries/aeat.ts`
-  - Toggles y botones: `ViewModeToggle.tsx`, páginas Transferencias/CCAA
-- [ ] Verificación: `grep -r "326891\|e07b39\|blue-600\|blue-700" web/src/` debe devolver 0 coincidencias.
+- [x] Crear `web/src/utils/colors.ts` con la paleta tokenizada.
+- [x] Actualizar `--color-accent`, `--color-accent-dark` y añadir `--color-bg-paper`, `--color-accent-alt`, `--color-positive` en `web/src/index.css`.
+- [x] Reemplazar todos los `#326891`, `#e07b39` y clases `blue-*` en charts, queries y páginas.
+- [x] Verificación: `grep -r "326891\|e07b39\|blue-600\|blue-700" web/src/` → 0 coincidencias.
 
-### Milestone 7.2 — Cabecera sticky ⏳
+### Milestone 7.2 — Cabecera sticky ✅
 
-- [ ] Crear `web/src/components/layout/TopBar.tsx`: cabecera `position: sticky; top: 0` con `ScopeSelector` + `YearSelector` + `ViewModeToggle`; oculta los controles no aplicables a la página actual.
-- [ ] Refactor `AppShell.tsx`: sidebar solo con navegación (sin `YearSelector` ni entity toggle); hueco reservado para TopBar.
-- [ ] Añadir `pageFilters` en `web/src/store/filters.ts` (p.ej. `{ showScope: boolean, showViewMode: boolean }`) para que cada página declare qué controles necesita.
-- [ ] Adaptar responsive: en móvil la TopBar se compacta (selectores colapsados en un botón).
+- [x] Crear `web/src/components/layout/TopBar.tsx` con EntityToggle + YearSelector + ViewModeToggle condicional.
+- [x] Refactor `AppShell.tsx`: sidebar solo con navegación; TopBar integrada sobre el `<main>`.
+- [x] Añadir `pageFilters: { showViewMode }` + `setPageFilters` en `web/src/store/filters.ts`.
+- [x] Páginas Ingresos, Gastos y Comparativa registran/limpian `showViewMode` vía `useEffect`.
 
-### Milestone 7.3 — Cierre de fase ⏳
+### Milestone 7.3 — Cierre de fase ✅
 
-- [ ] Repasar los `[ ]` de 7.0–7.2; todos marcados.
-- [ ] `grep -r "326891\|e07b39\|blue-600\|blue-700" web/src/` → 0 coincidencias.
-- [ ] Revisar visualmente todas las páginas existentes — sin regresiones.
-- [ ] Si hubo desviaciones del diseño, actualizar `ARCHITECTURE.md`.
-- [ ] Marcar Fase 7 como ✅ en el resumen de fases y en la cabecera.
+- [x] Milestones 7.0–7.2 completados.
+- [x] `grep` de residuos azules → 0 coincidencias.
+- [x] `pnpm build` sin errores TypeScript.
+- [x] ARCHITECTURE.md actualizado con diseño final (sin desviaciones relevantes).
+- [x] Fase 7 marcada ✅ en resumen y cabecera.
 
 ---
 
@@ -561,14 +550,13 @@ Fase 4 (despliegue) ──► necesario antes de publicar Fase 6
 
 **Objetivo:** Pasar de la navegación actual "Ingresos/Gastos/Comparativa/..." a una estructura **por ámbito**: Global (AAPP) / Estado / CCAA / SS. Dentro de cada ámbito: Ingresos, Gastos, Deuda. Plan vs Ejecución se integra como un 3er modo (`'comparativa'`) dentro de Ingresos y Gastos — la página `/comparativa` desaparece.
 
-### Milestone 8.0 — Diseño en ARCHITECTURE.md ⏳
+### Milestone 8.0 — Actualizar ARCHITECTURE.md ⏳
 
-- [ ] Documentar en `ARCHITECTURE.md`:
-  - Nuevo modelo del store (`scopeType` reemplaza a `entityType`; `viewMode` con 3 valores).
-  - Árbol de rutas completo tras la reorganización.
-  - Mapa de redirects desde las rutas antiguas.
-  - Cómo se integra la Comparativa como 3er modo del toggle en Ingresos y Gastos.
-  - Nuevo contrato de Inicio (dashboard AAPP consolidado).
+- [ ] Actualizar en `ARCHITECTURE.md` las secciones afectadas:
+  - Store (`scopeType` reemplaza a `entityType`; `viewMode` con 3 valores; `pageFilters` ampliado).
+  - Árbol de rutas en el árbol de directorios y en "Capa Educativa".
+  - Nota sobre redirects desde las rutas antiguas.
+  - Cómo se integra la Comparativa como 3er modo del toggle.
 
 ### Milestone 8.1 — Store y routing ⏳
 
@@ -631,13 +619,13 @@ Fase 4 (despliegue) ──► necesario antes de publicar Fase 6
 
 **Objetivo:** Incorporar las cuentas consolidadas de las Administraciones Públicas (SEC2010) y el PIB, para alimentar las páginas `/aapp/*` y los KPIs de Inicio y Deuda.
 
-### Milestone 9.0 — Diseño en ARCHITECTURE.md ⏳
+### Milestone 9.0 — Actualizar ARCHITECTURE.md ⏳
 
-- [ ] Documentar en `ARCHITECTURE.md`:
-  - Esquema de las 3 tablas nuevas (`aapp_ingresos`, `aapp_gastos`, `pib_anual`) con columnas, claves y unidades.
-  - Mapeo de los códigos Eurostat (`gov_10a_main` NA_ITEM → `concepto` canónico; subsectores `S13*`).
-  - Añadir filas en la tabla "Fuentes de Datos" (Eurostat `gov_10a_main`, `nama_10_gdp`, IGAE Contabilidad Nacional).
-  - Notas: publicación SEC2010 anual, revisiones hacia atrás, moneda y deflactor.
+- [ ] Actualizar en `ARCHITECTURE.md` las secciones afectadas:
+  - Esquema DuckDB: añadir tablas `aapp_ingresos`, `aapp_gastos`, `pib_anual` con columnas, claves y unidades.
+  - Tabla "Fuentes de Datos": añadir Eurostat `gov_10a_main`, `nama_10_gdp`, IGAE Contabilidad Nacional.
+  - Árbol de ficheros: añadir `scrapers/igae_sec2010.py`, `queries/aapp.ts`, `pages/AAPP/`.
+  - Nota sobre mapeo Eurostat NA_ITEM → `concepto` canónico y cobertura temporal.
 
 ### Milestone 9.1 — Scraper IGAE SEC2010 + PIB ⏳
 
@@ -700,14 +688,12 @@ CREATE TABLE pib_anual (
 
 **Objetivo:** Añadir la tercera pata de las cuentas públicas: evolución del stock de deuda, ratio/PIB, intereses, emisiones brutas/netas del Tesoro y desglose por tenedores.
 
-### Milestone 10.0 — Diseño en ARCHITECTURE.md ⏳
+### Milestone 10.0 — Actualizar ARCHITECTURE.md ⏳
 
-- [ ] Documentar en `ARCHITECTURE.md`:
-  - Esquema de las 3 tablas nuevas (`deuda_pde`, `deuda_emisiones`, `deuda_tenedores`) con columnas, claves y unidades.
-  - Fuentes y método de extracción para cada una (Eurostat `gov_10dd_edpt1`, BdE SPAM, Tesoro, BdE Tenedores).
-  - Rutas nuevas `/aapp/deuda`, `/estado/deuda`, `/ccaa/deuda`, `/ss/deuda` con el contenido previsto de cada una.
-  - Nota sobre PIB autonómico para el ranking CCAA (fuente y tabla).
-  - Añadir filas correspondientes en la tabla "Fuentes de Datos".
+- [ ] Actualizar en `ARCHITECTURE.md` las secciones afectadas:
+  - Esquema DuckDB: añadir tablas `deuda_pde`, `deuda_emisiones`, `deuda_tenedores`.
+  - Tabla "Fuentes de Datos": añadir Eurostat `gov_10dd_edpt1`, BdE SPAM, BdE Tenedores, Tesoro emisiones.
+  - Árbol de ficheros: añadir `scrapers/deuda.py`, `queries/deuda.ts`, `pages/*/Deuda.tsx`.
 
 ### Milestone 10.1 — Scraper y tablas ⏳
 

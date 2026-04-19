@@ -17,8 +17,8 @@ export default function ViewModeToggle() {
           onClick={() => setViewMode(value)}
           className={`px-3 py-1.5 transition-colors ${
             viewMode === value
-              ? 'bg-blue-600 text-white'
-              : 'text-gray-600 hover:bg-gray-50'
+              ? 'bg-[var(--color-accent)] text-white'
+              : 'text-[var(--color-ink-muted)] hover:bg-gray-50'
           }`}
         >
           {label}

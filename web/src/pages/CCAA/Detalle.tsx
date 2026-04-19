@@ -243,10 +243,10 @@ export default function CcaaDetalle() {
                     categories={gastosCats}
                     series={[
                       ...(gastosPlanData.some((v) => v > 0)
-                        ? [{ name: 'Plan', data: gastosPlanData, color: '#326891' }]
+                        ? [{ name: 'Plan', data: gastosPlanData, color: '#B82A2A' }]
                         : []),
                       ...(gastosEjecData.some((v) => v > 0)
-                        ? [{ name: 'Ejecución', data: gastosEjecData, color: '#e07b39' }]
+                        ? [{ name: 'Ejecución', data: gastosEjecData, color: '#C89B3C' }]
                         : []),
                     ]}
                     horizontal
@@ -328,10 +328,10 @@ export default function CcaaDetalle() {
                     categories={ingresosCats}
                     series={[
                       ...(ingresosPlanData.some((v) => v > 0)
-                        ? [{ name: 'Plan', data: ingresosPlanData, color: '#326891' }]
+                        ? [{ name: 'Plan', data: ingresosPlanData, color: '#B82A2A' }]
                         : []),
                       ...(ingresosEjecData.some((v) => v > 0)
-                        ? [{ name: 'Ejecución', data: ingresosEjecData, color: '#e07b39' }]
+                        ? [{ name: 'Ejecución', data: ingresosEjecData, color: '#C89B3C' }]
                         : []),
                     ]}
                     horizontal
@@ -409,10 +409,10 @@ export default function CcaaDetalle() {
                     categories={gastosCats}
                     series={[
                       ...(gastosPlanData.some((v) => v > 0)
-                        ? [{ name: 'Plan', data: gastosPlanData, color: '#326891' }]
+                        ? [{ name: 'Plan', data: gastosPlanData, color: '#B82A2A' }]
                         : []),
                       ...(gastosEjecData.some((v) => v > 0)
-                        ? [{ name: 'Ejecución', data: gastosEjecData, color: '#e07b39' }]
+                        ? [{ name: 'Ejecución', data: gastosEjecData, color: '#C89B3C' }]
                         : []),
                     ]}
                     height={280}

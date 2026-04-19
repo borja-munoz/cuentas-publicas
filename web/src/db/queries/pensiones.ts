@@ -9,11 +9,11 @@ export const PENSION_TIPO_LABELS: Record<string, string> = {
 }
 
 export const PENSION_TIPO_COLORS: Record<string, string> = {
-  jubilacion:    '#326891',
-  incapacidad:   '#e07b39',
-  viudedad:      '#5a9ab0',
-  orfandad:      '#2d6a4f',
-  favor_familiar: '#8b6e45',
+  jubilacion:     '#B82A2A',
+  incapacidad:    '#C89B3C',
+  viudedad:       '#5C6F7E',
+  orfandad:       '#7E9E8B',
+  favor_familiar: '#8B6B7A',
 }
 
 export interface PensionAnual {

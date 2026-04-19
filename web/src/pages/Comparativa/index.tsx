@@ -19,9 +19,14 @@ interface ComparativaRow {
 }
 
 export default function Comparativa() {
-  const { selectedYear, entityType } = useFilters()
+  const { selectedYear, entityType, setPageFilters } = useFilters()
   const [rows, setRows] = useState<ComparativaRow[]>([])
   const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    setPageFilters({ showViewMode: false })
+    return () => setPageFilters({ showViewMode: false })
+  }, [setPageFilters])
 
   useEffect(() => {
     setLoading(true)
@@ -158,8 +163,8 @@ export default function Comparativa() {
               <BarChart
                 categories={barCats}
                 series={[
-                  { name: 'Plan', data: barPlan, color: '#326891' },
-                  { name: 'Ejecución', data: barEjec, color: '#e07b39' },
+                  { name: 'Plan', data: barPlan, color: '#B82A2A' },
+                  { name: 'Ejecución', data: barEjec, color: '#C89B3C' },
                 ]}
                 height={300}
               />

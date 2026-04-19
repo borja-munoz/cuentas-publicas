@@ -68,6 +68,7 @@ cuentas-publicas/
 │       ├── App.tsx                       # Router + AppShell
 │       ├── utils/
 │       │   ├── format.ts                 # formatEur (siempre M€), formatPct, formatNum
+│       │   ├── colors.ts                 # Paleta editorial: PALETTE + CATEGORICAL
 │       │   └── insights.ts              # Interfaz Insight { label, value, trend, description }
 │       ├── db/
 │       │   ├── client.ts                 # Singleton DuckDB WASM (getDB, query<T>)
@@ -77,14 +78,15 @@ cuentas-publicas/
 │       │       ├── aeat.ts              # Queries recaudación AEAT + IMPUESTO_COLORS
 │       │       └── ccaa.ts              # Queries CCAA: transferencias, resumen, capítulos
 │       ├── store/
-│       │   └── filters.ts               # Zustand: selectedYear, entityType, viewMode
+│       │   └── filters.ts               # Zustand: selectedYear, entityType, viewMode, pageFilters
 │       ├── components/
 │       │   ├── layout/
-│       │   │   ├── AppShell.tsx          # Sidebar + YearSelector + EntitySelector
+│       │   │   ├── AppShell.tsx          # Sidebar (solo navegación) + TopBar + mobile header
+│       │   │   ├── TopBar.tsx            # Barra sticky: EntityToggle + YearSelector + ViewModeToggle
 │       │   │   └── PageHeader.tsx        # Título + subtítulo de página
 │       │   ├── filters/
 │       │   │   ├── YearSelector.tsx
-│       │   │   └── ViewModeToggle.tsx    # Plan / Ejecución
+│       │   │   └── ViewModeToggle.tsx    # Plan / Ejecución / Comparativa
 │       │   ├── charts/
 │       │   │   ├── BarChart.tsx          # ECharts barras (simple, apiladas, agrupadas, horizontal)
 │       │   │   ├── LineChart.tsx         # ECharts líneas multi-serie (series temporales)
@@ -354,6 +356,37 @@ GROUP BY ALL;
 ---
 
 ## Convenciones del Frontend
+
+### Paleta de colores
+
+Los tokens de color se centralizan en `src/utils/colors.ts` y se exponen como variables CSS en el bloque `@theme` de `src/index.css`. Nunca se usan valores hex hardcoded fuera de esos dos archivos.
+
+| Rol | Variable CSS / token | Valor | Uso |
+|-----|----------------------|-------|-----|
+| Acento principal | `--color-accent` / `PALETTE.accent` | `#B82A2A` | Plan, primera serie, color de marca |
+| Acento secundario | `--color-accent-alt` / `PALETTE.accentAlt` | `#C89B3C` | Ejecución, segunda serie |
+| Acento oscuro | `--color-accent-dark` / `PALETTE.accentDark` | `#7a1a1a` | Hover, bordes activos |
+| Positivo | `--color-positive` / `PALETTE.positive` | `#1F7A3D` | Superávit, tendencia favorable |
+| Negativo | — / `PALETTE.negative` | `#B82A2A` | Déficit, tendencia desfavorable (= accent) |
+| Fondo crema | `--color-bg-paper` / `PALETTE.paper` | `#FAF7F2` | Cards, ContextBox |
+
+Para gráficas con 3+ series se usa el array `CATEGORICAL` (8 colores en orden, el primero es `accent`).
+
+### Layout — TopBar sticky
+
+Los controles globales (entidad, año, modo) viven en `TopBar.tsx`, una barra `sticky top-0` que aparece encima del contenido en todas las páginas. La sidebar queda exclusivamente para navegación.
+
+El store `filters.ts` expone `pageFilters: { showViewMode: boolean }` y `setPageFilters()`. Las páginas que necesitan el toggle Plan/Ejecución lo activan con:
+
+```typescript
+useEffect(() => {
+  setPageFilters({ showViewMode: true })
+  return () => setPageFilters({ showViewMode: false })
+}, [setPageFilters])
+```
+
+Páginas con `showViewMode: true`: Ingresos (Estado), Gastos (Estado).
+Páginas sin toggle: Inicio, Impuestos AEAT, IVA, Gasto por función, Pensiones, Transferencias, CCAA.
 
 ### Unidades monetarias
 

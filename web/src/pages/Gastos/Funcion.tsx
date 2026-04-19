@@ -181,7 +181,7 @@ export default function GastosFuncion() {
               ? [{
                   name: 'Importe',
                   data: barData,
-                  color: '#326891',
+                  color: '#B82A2A',
                 }]
               : []}
             horizontal

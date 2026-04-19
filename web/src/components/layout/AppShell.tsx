@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
-import { useFilters, type EntityType } from '../../store/filters'
-import YearSelector from '../filters/YearSelector'
+import TopBar from './TopBar'
 
 const NAV_ITEMS = [
   { to: '/', label: 'Inicio', end: true },
@@ -16,14 +15,8 @@ const NAV_ITEMS = [
   { to: '/ccaa', label: 'CCAA' },
 ]
 
-const ENTITY_OPTIONS: { value: EntityType; label: string }[] = [
-  { value: 'Estado', label: 'Estado' },
-  { value: 'SS', label: 'Seg. Social' },
-]
-
 export default function AppShell() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const { entityType, setEntityType } = useFilters()
 
   return (
     <div className="flex min-h-screen bg-[var(--color-surface)]">
@@ -62,39 +55,6 @@ export default function AppShell() {
             </NavLink>
           ))}
         </nav>
-
-        {/* Filters */}
-        <div className="border-t border-[var(--color-rule)] px-4 py-3 space-y-3">
-          {/* Year selector */}
-          <div>
-            <p className="mb-1 text-[0.65rem] font-semibold uppercase tracking-widest text-[var(--color-ink-faint)]">
-              Año
-            </p>
-            <YearSelector />
-          </div>
-
-          {/* Entity toggle */}
-          <div>
-            <p className="mb-1 text-[0.65rem] font-semibold uppercase tracking-widest text-[var(--color-ink-faint)]">
-              Entidad
-            </p>
-            <div className="flex rounded border border-[var(--color-rule)] overflow-hidden text-xs font-medium">
-              {ENTITY_OPTIONS.map(({ value, label }) => (
-                <button
-                  key={value}
-                  onClick={() => setEntityType(value)}
-                  className={`flex-1 py-1.5 transition-colors ${
-                    entityType === value
-                      ? 'bg-[var(--color-accent)] text-white'
-                      : 'text-[var(--color-ink-muted)] hover:bg-gray-50'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
       </aside>
 
       {/* Backdrop (mobile) */}
@@ -107,7 +67,7 @@ export default function AppShell() {
 
       {/* Main */}
       <div className="flex flex-1 flex-col md:pl-56">
-        {/* Mobile top bar */}
+        {/* Mobile header */}
         <header className="flex h-14 items-center border-b border-[var(--color-rule)] bg-white px-4 md:hidden">
           <button
             onClick={() => setSidebarOpen(true)}
@@ -120,6 +80,9 @@ export default function AppShell() {
             Cuentas Públicas
           </span>
         </header>
+
+        {/* Sticky top bar with filters */}
+        <TopBar />
 
         <main className="flex-1 px-4 py-8 md:px-10">
           <Outlet />

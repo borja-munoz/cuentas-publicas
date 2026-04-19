@@ -226,7 +226,7 @@ export default function Impuestos() {
           ) : (
             <BarChart
               categories={barCats}
-              series={[{ name: 'Recaudación neta', data: barNeto, color: '#326891' }]}
+              series={[{ name: 'Recaudación neta', data: barNeto, color: '#B82A2A' }]}
               height={240}
               horizontal
             />

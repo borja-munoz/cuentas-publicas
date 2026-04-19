@@ -154,12 +154,12 @@ export default function CCAA() {
   const detalleSeriesPlan = {
     name: 'Plan',
     data: detalleYears.map((c) => detallePlan.find((d) => d.capitulo === c)?.importe ?? 0),
-    color: '#326891',
+    color: '#B82A2A',
   }
   const detalleSeriesEjec = {
     name: 'Ejecución',
     data: detalleYears.map((c) => detalleEjec.find((d) => d.capitulo === c)?.importe ?? 0),
-    color: '#e07b39',
+    color: '#C89B3C',
   }
 
   return (
@@ -267,8 +267,8 @@ export default function CCAA() {
                       return (
                         <tr
                           key={r.ccaa_cod}
-                          className={`cursor-pointer transition-colors hover:bg-blue-50/50 ${
-                            selectedCcaa === r.ccaa_cod ? 'bg-blue-50' : ''
+                          className={`cursor-pointer transition-colors hover:bg-[var(--color-accent)]/5 ${
+                            selectedCcaa === r.ccaa_cod ? 'bg-[var(--color-accent)]/10' : ''
                           }`}
                           onClick={() =>
                             setSelectedCcaa((prev) => (prev === r.ccaa_cod ? null : r.ccaa_cod))

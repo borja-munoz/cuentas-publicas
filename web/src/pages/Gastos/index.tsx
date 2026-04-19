@@ -31,19 +31,19 @@ type Vista = 'economica' | 'politica'
 const CAPS_OPERACIONALES = [1, 2, 3, 4, 6, 7]
 
 const CAP_COLORS: Record<number, string> = {
-  1: '#1a3a52',
-  2: '#326891',
-  3: '#e07b39',
-  4: '#5a9ab0',
-  6: '#2d6a4f',
-  7: '#7eb8d0',
+  1: '#7a1a1a',
+  2: '#B82A2A',
+  3: '#C89B3C',
+  4: '#5C6F7E',
+  6: '#7E9E8B',
+  7: '#8B6B7A',
 }
 
 // Grupos funcionales para el treemap jerárquico (nivel 1 → nivel 2)
 const GRUPOS: { nombre: string; color: string; politicas: string[] }[] = [
   {
     nombre: 'Protección Social',
-    color: '#326891',
+    color: '#B82A2A',
     politicas: [
       'Pensiones',
       'Desempleo',
@@ -56,7 +56,7 @@ const GRUPOS: { nombre: string; color: string; politicas: string[] }[] = [
   },
   {
     nombre: 'Sanidad y Educación',
-    color: '#e07b39',
+    color: '#C89B3C',
     politicas: [
       'Sanidad',
       'Educación',
@@ -66,7 +66,7 @@ const GRUPOS: { nombre: string; color: string; politicas: string[] }[] = [
   },
   {
     nombre: 'Defensa y Seguridad',
-    color: '#dc2626',
+    color: '#5C6F7E',
     politicas: [
       'Defensa',
       'Seguridad ciudadana e Instituciones penitenciarias',
@@ -76,7 +76,7 @@ const GRUPOS: { nombre: string; color: string; politicas: string[] }[] = [
   },
   {
     nombre: 'Economía e Industria',
-    color: '#16a34a',
+    color: '#7E9E8B',
     politicas: [
       'Agricultura, Pesca y Alimentación',
       'Industria y Energía',
@@ -90,7 +90,7 @@ const GRUPOS: { nombre: string; color: string; politicas: string[] }[] = [
   },
   {
     nombre: 'Administración y Financiero',
-    color: '#6b7280',
+    color: '#8B6B7A',
     politicas: [
       'Servicios de carácter general',
       'Administración Financiera y Tributaria',
@@ -111,8 +111,13 @@ const POLITICA_COLORS: Record<string, string> = Object.fromEntries(
 )
 
 export default function Gastos() {
-  const { selectedYear, entityType, viewMode } = useFilters()
+  const { selectedYear, entityType, viewMode, setPageFilters } = useFilters()
   const fuente = viewMode === 'ejecucion' ? 'ejecucion' : 'plan'
+
+  useEffect(() => {
+    setPageFilters({ showViewMode: true })
+    return () => setPageFilters({ showViewMode: false })
+  }, [setPageFilters])
 
   const [vista, setVista] = useState<Vista>('politica')
 
@@ -453,7 +458,7 @@ export default function Gastos() {
               ) : (
                 <BarChart
                   categories={barCats}
-                  series={[{ name: 'Gasto', data: barData, color: '#326891' }]}
+                  series={[{ name: 'Gasto', data: barData, color: '#B82A2A' }]}
                   horizontal
                   height={280}
                 />

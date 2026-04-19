@@ -14,16 +14,16 @@ export const COFOG_NAMES: Record<string, string> = {
 }
 
 export const COFOG_COLORS: Record<string, string> = {
-  GF01: '#6b7280',
-  GF02: '#dc2626',
-  GF03: '#d97706',
-  GF04: '#16a34a',
-  GF05: '#059669',
-  GF06: '#0891b2',
-  GF07: '#2563eb',
-  GF08: '#7c3aed',
-  GF09: '#c026d3',
-  GF10: '#326891',
+  GF01: '#999999',
+  GF02: '#B82A2A',
+  GF03: '#C89B3C',
+  GF04: '#5C6F7E',
+  GF05: '#7E9E8B',
+  GF06: '#4A7A8B',
+  GF07: '#8B6B7A',
+  GF08: '#9A6B3C',
+  GF09: '#6b7280',
+  GF10: '#7a1a1a',
 }
 
 export const SECTOR_NAMES: Record<string, string> = {

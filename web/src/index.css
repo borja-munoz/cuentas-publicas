@@ -3,13 +3,16 @@
 
 @theme {
   --font-sans: "Inter", system-ui, sans-serif;
-  --color-accent:      #326891;
-  --color-accent-dark: #1a3a52;
+  --color-accent:      #B82A2A;
+  --color-accent-dark: #7a1a1a;
+  --color-accent-alt:  #C89B3C;
+  --color-positive:    #1F7A3D;
   --color-ink:         #1a1a1a;
   --color-ink-muted:   #666666;
   --color-ink-faint:   #999999;
   --color-rule:        #e8e8e8;
   --color-surface:     #fafaf8;
+  --color-bg-paper:    #FAF7F2;
 }
 
 body {

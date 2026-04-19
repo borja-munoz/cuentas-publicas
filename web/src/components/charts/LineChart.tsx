@@ -1,5 +1,6 @@
 import ReactECharts from 'echarts-for-react'
 import { formatEur } from '../../utils/format'
+import { CATEGORICAL } from '../../utils/colors'
 
 export interface LineSeries {
   name: string
@@ -17,10 +18,7 @@ interface LineChartProps {
   markArea?: { xMin: string; xMax: string; label: string }
 }
 
-const DEFAULT_COLORS = [
-  '#326891', '#e07b39', '#2d6a4f', '#5a9ab0',
-  '#8b6e45', '#7eb8d0', '#c0392b', '#999999',
-]
+const DEFAULT_COLORS = CATEGORICAL
 
 export default function LineChart({
   categories,
