@@ -8,7 +8,10 @@ import { useFilters } from './store/filters'
 import Inicio from './pages/Inicio'
 import Ingresos from './pages/Ingresos'
 import Impuestos from './pages/Ingresos/Impuestos'
+import IvaTipos from './pages/Ingresos/IvaTipos'
 import Gastos from './pages/Gastos'
+import GastosFuncion from './pages/Gastos/Funcion'
+import Pensiones from './pages/Gastos/Pensiones'
 import Comparativa from './pages/Comparativa'
 import Transferencias from './pages/Transferencias'
 import CCAA from './pages/CCAA'
@@ -64,7 +67,10 @@ export default function App() {
             <Route index element={<Inicio />} />
             <Route path="ingresos" element={<Ingresos />} />
             <Route path="ingresos/impuestos" element={<Impuestos />} />
+            <Route path="ingresos/impuestos/iva" element={<IvaTipos />} />
             <Route path="gastos" element={<Gastos />} />
+            <Route path="gastos/funcion" element={<GastosFuncion />} />
+            <Route path="gastos/pensiones" element={<Pensiones />} />
             <Route path="comparativa" element={<Comparativa />} />
             <Route path="transferencias" element={<Transferencias />} />
             <Route path="ccaa" element={<CCAA />} />

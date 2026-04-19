@@ -148,6 +148,49 @@ CREATE TABLE IF NOT EXISTS ccaa_gastos (
     importe     DECIMAL(18,2),
     PRIMARY KEY (year, ccaa_cod, capitulo, fuente)
 );
+
+-- Gasto por función COFOG (Eurostat gov_10a_exp, España)
+-- sector: 'S13'=AAPP, 'S1311'=Estado, 'S1312'=CCAA, 'S1313'=CCLL, 'S1314'=SS
+-- cofog_cod: 'GF01'...'GF10'  |  importe en M€
+CREATE TABLE IF NOT EXISTS gastos_funcion (
+    year       INTEGER NOT NULL,
+    sector     VARCHAR NOT NULL,
+    cofog_cod  VARCHAR NOT NULL,
+    cofog_nom  VARCHAR NOT NULL,
+    importe    DECIMAL(18,2),
+    PRIMARY KEY (year, sector, cofog_cod)
+);
+
+-- Recaudación IVA por tipo impositivo (AEAT Modelo 390 agregado nacional)
+-- tipo: 'general' (21%), 'reducido' (10%), 'superreducido' (4%)  |  M€
+CREATE TABLE IF NOT EXISTS recaudacion_iva_tipo (
+    year             INTEGER NOT NULL,
+    tipo             VARCHAR NOT NULL,
+    base_imponible   DECIMAL(18,2),
+    cuota_devengada  DECIMAL(18,2),
+    PRIMARY KEY (year, tipo)
+);
+
+-- Gastos por política de gasto PGE consolidado (SEPG, hoja 141)
+-- Clasif. funcional: Pensiones, Defensa, Sanidad, Educación, etc.  |  M€
+CREATE TABLE IF NOT EXISTS gastos_politica (
+    year         INTEGER NOT NULL,
+    politica_nom VARCHAR NOT NULL,
+    importe      DECIMAL(18,2),
+    PRIMARY KEY (year, politica_nom)
+);
+
+-- Pensiones contributivas SS (mites.gob.es BEL PEN-3, serie anual)
+-- tipo: 'jubilacion', 'incapacidad', 'viudedad', 'orfandad', 'favor_familiar'
+-- importe_total: M€/mes  |  pension_media: €/mes
+CREATE TABLE IF NOT EXISTS pensiones_ss (
+    year           INTEGER NOT NULL,
+    tipo           VARCHAR NOT NULL,
+    num_pensiones  INTEGER,
+    importe_total  DECIMAL(18,2),
+    pension_media  DECIMAL(10,2),
+    PRIMARY KEY (year, tipo)
+);
 """
 
 _VIEWS = """

@@ -9,7 +9,7 @@
 | 3 | Visualizaciones nacionales | ✅ Completo |
 | 4 | Despliegue y CI/CD | ✅ Completo |
 | 5 | Visualizaciones CCAA | ✅ Completo |
-| 6 | Drill-down granular (gastos por función, impuestos por tipo) | ⏳ Pendiente |
+| 6 | Drill-down granular (gastos por función, impuestos por tipo) | ✅ Completo (6.3 IRPF tramos diferido) |
 
 ### Dependencias entre fases
 
@@ -326,13 +326,13 @@ Fase 2 ──► Fase 3 ──► Fase 4
 
 ---
 
-## Fase 6: Drill-down Granular ⏳
+## Fase 6: Drill-down Granular ✅
 
 **Objetivo:** Añadir datos de mayor granularidad para explorar el detalle funcional del gasto y el detalle por tipo de los impuestos. Requiere Fase 4 desplegada. Los datos de esta fase se añaden al `.duckdb` existente como tablas nuevas.
 
 ---
 
-### Milestone 6.1 — Gastos por función (clasificación funcional COFOG)
+### Milestone 6.1 — Gastos por función (clasificación funcional COFOG) ✅
 
 La clasificación económica por capítulos (fase 1) solo dice *qué tipo* de gasto es (personal, transferencias, inversión…). La clasificación **funcional** dice *para qué* se gasta: sanidad, educación, defensa, pensiones, etc.
 
@@ -389,7 +389,11 @@ CREATE TABLE gastos_programa (
 
 ---
 
-### Milestone 6.2 — IVA por tipo impositivo
+**Implementado:** `scrapers/igae_cofog.py` (Eurostat API `gov_10a_exp`, 5 sectores S13/S1311–S1314), tabla `gastos_funcion`, queries `cofog.ts`, página `/gastos/funcion` con selector de sector y año, BarChart horizontal y LineChart histórico multi-COFOG.
+
+---
+
+### Milestone 6.2 — IVA por tipo impositivo ✅
 
 El IVA en España se aplica a tres tipos: **general (21%)**, **reducido (10%)** y **super-reducido (4%)**. La AEAT publica el desglose en el Anuario Estadístico (tabla de recaudación IVA por régimen y tipo).
 
@@ -415,7 +419,11 @@ CREATE TABLE recaudacion_iva_tipo (
 
 ---
 
-### Milestone 6.3 — IRPF por tramo de renta
+**Implementado:** `scrapers/iva_tipos.py` (AEAT `modelo390.csv`, filtro `TIPOPER=0`), tabla `recaudacion_iva_tipo`, queries `iva_tipos.ts`, página `/ingresos/impuestos/iva` con BarChart base/cuota por tipo y LineChart histórico.
+
+---
+
+### Milestone 6.3 — IRPF por tramo de renta ⏸ Diferido
 
 La AEAT publica estadísticas de IRPF por tramo de base liquidable, que permiten ver la distribución de la carga fiscal entre rentas bajas, medias y altas.
 
@@ -443,7 +451,11 @@ CREATE TABLE irpf_tramos (
 
 ---
 
-### Milestone 6.4 — Pensiones (detalle Seguridad Social)
+**Estado:** Diferido — no existe URL de descarga masiva del fichero de tramos IRPF en AEAT. Los datos se publican en una aplicación web interactiva (Anuario Estadístico AEAT) sin endpoint CSV/Excel exportable directamente. Se retomará si se identifica una fuente automatizable.
+
+---
+
+### Milestone 6.4 — Pensiones (detalle Seguridad Social) ✅
 
 Los datos de SS ya están cargados a nivel de capítulo. La TGSS publica el detalle por tipo de pensión (jubilación, incapacidad, viudedad, orfandad) con número de pensionistas e importe medio.
 
@@ -468,6 +480,10 @@ CREATE TABLE pensiones_ss (
 - KPI: pensión media, número de pensionistas, gasto total.
 - Gráfico de línea: evolución de la pensión media y el número de pensionistas (1990–hoy).
 - Gráfico de barras apiladas: distribución del gasto por tipo de pensión.
+
+---
+
+**Implementado:** `scrapers/pensiones.py` (mites.gob.es BEL PEN-3, SSL bypass), tabla `pensiones_ss`, queries `pensiones.ts`, página `/gastos/pensiones` con BarChart por tipo, tabla detalle, LineChart gasto total y LineChart pensión media.
 
 ---
 

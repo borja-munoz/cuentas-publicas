@@ -16,6 +16,7 @@ dependencies = [
     "tqdm>=4.66",
     "rich>=13.7",
     "click>=8.1",
+    "lxml>=6.0.2",
 ]
 
 [project.scripts]

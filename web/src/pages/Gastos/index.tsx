@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import PageHeader from '../../components/layout/PageHeader'
 import ContextBox from '../../components/ui/ContextBox'
 import KpiCard from '../../components/ui/KpiCard'
 import InsightsPanel from '../../components/ui/InsightsPanel'
 import BarChart from '../../components/charts/BarChart'
 import LineChart from '../../components/charts/LineChart'
+import TreemapChart from '../../components/charts/TreemapChart'
 import { ChartSkeleton } from '../../components/ui/LoadingSkeleton'
 import { useFilters } from '../../store/filters'
 import InfoTooltip from '../../components/ui/InfoTooltip'
@@ -15,8 +16,16 @@ import {
   CAPITULO_GASTOS_TOOLTIP,
   type GastosAnuales,
 } from '../../db/queries/gastos'
+import {
+  getGastosPoliticaAnio,
+  getGastosPoliticaHistorico,
+  getGastosPoliticaYears,
+  type GastoPolitica,
+} from '../../db/queries/gastos_politica'
 import { formatEur, formatPct } from '../../utils/format'
 import type { Insight } from '../../utils/insights'
+
+type Vista = 'economica' | 'politica'
 
 // Capítulos con datos operacionales (excluir 8=Activos fin., 9=Pasivos fin.)
 const CAPS_OPERACIONALES = [1, 2, 3, 4, 6, 7]
@@ -30,43 +39,138 @@ const CAP_COLORS: Record<number, string> = {
   7: '#7eb8d0',
 }
 
+// Grupos funcionales para el treemap jerárquico (nivel 1 → nivel 2)
+const GRUPOS: { nombre: string; color: string; politicas: string[] }[] = [
+  {
+    nombre: 'Protección Social',
+    color: '#326891',
+    politicas: [
+      'Pensiones',
+      'Desempleo',
+      'Otras Prestaciones Económicas',
+      'Servicios Sociales y Promoción Social',
+      'Fomento del empleo',
+      'Gestión y administración de la inclusión, de la S.S. y de la migración',
+      'Gestión y administración de trabajo y economía social',
+    ],
+  },
+  {
+    nombre: 'Sanidad y Educación',
+    color: '#e07b39',
+    politicas: [
+      'Sanidad',
+      'Educación',
+      'Cultura',
+      'Acceso a la Vivienda y Fomento de la Edificación',
+    ],
+  },
+  {
+    nombre: 'Defensa y Seguridad',
+    color: '#dc2626',
+    politicas: [
+      'Defensa',
+      'Seguridad ciudadana e Instituciones penitenciarias',
+      'Justicia',
+      'Investigación militar',
+    ],
+  },
+  {
+    nombre: 'Economía e Industria',
+    color: '#16a34a',
+    politicas: [
+      'Agricultura, Pesca y Alimentación',
+      'Industria y Energía',
+      'Comercio, Turismo y PYMES',
+      'Subvenciones al transporte',
+      'Infraestructuras y ecosistemas resilientes',
+      'Investigación civil',
+      'Otras actuaciones de carácter económico',
+      'Política Exterior y de cooperación para el desarrollo',
+    ],
+  },
+  {
+    nombre: 'Administración y Financiero',
+    color: '#6b7280',
+    politicas: [
+      'Servicios de carácter general',
+      'Administración Financiera y Tributaria',
+      'Transferencias a otras Administraciones Públicas',
+      'Órganos Constitucionales, Gobierno y otros',
+    ],
+  },
+  {
+    nombre: 'Deuda Pública',
+    color: '#374151',
+    politicas: ['Deuda Pública'],
+  },
+]
+
+// Colores planos por política (para tabla y líneas)
+const POLITICA_COLORS: Record<string, string> = Object.fromEntries(
+  GRUPOS.flatMap((g) => g.politicas.map((p) => [p, g.color])),
+)
+
 export default function Gastos() {
   const { selectedYear, entityType, viewMode } = useFilters()
   const fuente = viewMode === 'ejecucion' ? 'ejecucion' : 'plan'
 
+  const [vista, setVista] = useState<Vista>('politica')
+
+  // ── Clasificación económica (capítulos) ──────────────────────────────────
   const [caps, setCaps] = useState<GastosAnuales[]>([])
   const [historico, setHistorico] = useState<GastosAnuales[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loadingCaps, setLoadingCaps] = useState(true)
+
+  // ── Políticas de gasto ────────────────────────────────────────────────────
+  const [politicaYears, setPoliticaYears] = useState<number[]>([])
+  const [politicas, setPoliticas] = useState<GastoPolitica[]>([])
+  const [politicasHist, setPoliticasHist] = useState<GastoPolitica[]>([])
+  const [loadingPoliticas, setLoadingPoliticas] = useState(true)
+
+  // El año de políticas es independiente: máximo disponible en gastos_politica
+  const politicaYear = useMemo(
+    () => (politicaYears.includes(selectedYear) ? selectedYear : (politicaYears[politicaYears.length - 1] ?? selectedYear)),
+    [politicaYears, selectedYear],
+  )
 
   useEffect(() => {
-    setLoading(true)
+    setLoadingCaps(true)
     Promise.all([
       getGastosPorCapitulo(selectedYear, entityType, fuente),
       getGastosHistoricoPorCapitulo(entityType, fuente),
     ])
-      .then(([c, h]) => {
-        setCaps(c)
-        setHistorico(h)
-      })
+      .then(([c, h]) => { setCaps(c); setHistorico(h) })
       .catch(console.error)
-      .finally(() => setLoading(false))
+      .finally(() => setLoadingCaps(false))
   }, [selectedYear, entityType, fuente])
 
+  useEffect(() => {
+    getGastosPoliticaYears()
+      .then(setPoliticaYears)
+      .catch(console.error)
+  }, [])
+
+  useEffect(() => {
+    setLoadingPoliticas(true)
+    Promise.all([
+      getGastosPoliticaAnio(politicaYear),
+      getGastosPoliticaHistorico(),
+    ])
+      .then(([p, ph]) => { setPoliticas(p); setPoliticasHist(ph) })
+      .catch(console.error)
+      .finally(() => setLoadingPoliticas(false))
+  }, [politicaYear])
+
+  // ── Derivados capítulos ───────────────────────────────────────────────────
   const capsOp = caps.filter((c) => CAPS_OPERACIONALES.includes(c.capitulo))
   const total = caps.reduce((s, r) => s + (r.importe ?? 0), 0)
   const totalOp = capsOp.reduce((s, r) => s + (r.importe ?? 0), 0)
+  const maxCap = capsOp.length > 0 ? capsOp.reduce((a, b) => (b.importe > a.importe ? b : a)) : null
 
-  const maxCap = capsOp.length > 0
-    ? capsOp.reduce((a, b) => (b.importe > a.importe ? b : a))
-    : null
-
-  // Serie histórica por capítulo (para gráfico de líneas apiladas)
   const allYears = [...new Set(historico.map((r) => r.year))].sort()
   const histCategories = allYears.map(String)
   const histSeries = CAPS_OPERACIONALES.map((cap) => {
-    const byYear = new Map(
-      historico.filter((r) => r.capitulo === cap).map((r) => [r.year, r.importe]),
-    )
+    const byYear = new Map(historico.filter((r) => r.capitulo === cap).map((r) => [r.year, r.importe]))
     return {
       name: CAPITULO_GASTOS[cap] ?? `Cap. ${cap}`,
       data: allYears.map((y) => byYear.get(y) ?? null) as number[],
@@ -74,22 +178,69 @@ export default function Gastos() {
     }
   }).filter((s) => s.data.some((v) => v != null && v > 0))
 
-  // Bar chart año actual
   const barCats = capsOp.map((c) => CAPITULO_GASTOS[c.capitulo] ?? `Cap. ${c.capitulo}`)
   const barData = capsOp.map((c) => c.importe)
 
-  // Cap 4 (transferencias corrientes) — suele ser el mayor
   const cap4 = capsOp.find((c) => c.capitulo === 4)
   const cap1 = capsOp.find((c) => c.capitulo === 1)
 
-  // YoY total
-  const prevYearData = historico.filter(
-    (h) => h.year === selectedYear - 1 && CAPS_OPERACIONALES.includes(h.capitulo),
-  )
+  const prevYearData = historico.filter((h) => h.year === selectedYear - 1 && CAPS_OPERACIONALES.includes(h.capitulo))
   const totalPrev = prevYearData.reduce((s, r) => s + (r.importe ?? 0), 0)
   const yoyRatio = totalPrev > 0 ? (totalOp - totalPrev) / totalPrev : null
 
-  const insights: Insight[] = loading || capsOp.length === 0 ? [] : [
+  // ── Derivados políticas ───────────────────────────────────────────────────
+  const totalPoliticas = politicas.reduce((s, r) => s + r.importe, 0)
+
+  const politicaHistYears = useMemo(
+    () => [...new Set(politicasHist.map((r) => r.year))].sort(),
+    [politicasHist],
+  )
+
+  // Top 10 políticas para el chart de líneas históricas
+  const topPoliticas = useMemo(
+    () => [...politicas].sort((a, b) => b.importe - a.importe).slice(0, 10).map((p) => p.politica_nom),
+    [politicas],
+  )
+
+  const politicaLineSeries = useMemo(
+    () =>
+      topPoliticas.map((nom) => ({
+        name: nom,
+        data: politicaHistYears.map(
+          (y) => politicasHist.find((r) => r.year === y && r.politica_nom === nom)?.importe ?? null,
+        ),
+        color: POLITICA_COLORS[nom],
+      })),
+    [topPoliticas, politicasHist, politicaHistYears],
+  )
+
+  const treemapData = useMemo(() => {
+    const byNombre = new Map(politicas.map((p) => [p.politica_nom, p.importe]))
+    return GRUPOS.map((g) => {
+      const children = g.politicas
+        .filter((nom) => byNombre.has(nom))
+        .map((nom) => {
+          const imp = byNombre.get(nom) ?? 0
+          return {
+            name: nom,
+            value: imp,
+            color: g.color,
+            percent: totalPoliticas > 0 ? +((imp / totalPoliticas) * 100).toFixed(1) : undefined,
+          }
+        })
+      const grupoTotal = children.reduce((s, c) => s + c.value, 0)
+      return {
+        name: g.nombre,
+        value: grupoTotal,
+        color: g.color,
+        percent: totalPoliticas > 0 ? +((grupoTotal / totalPoliticas) * 100).toFixed(1) : undefined,
+        children,
+      }
+    }).filter((g) => g.value > 0)
+  }, [politicas, totalPoliticas])
+
+  // ── Insights ──────────────────────────────────────────────────────────────
+  const insights: Insight[] = loadingCaps || capsOp.length === 0 ? [] : [
     ...(cap4 && totalOp > 0 ? [{
       label: 'Peso transf. corrientes (cap. 4)',
       value: `${((cap4.importe / totalOp) * 100).toLocaleString('es-ES', { maximumFractionDigits: 1 })}%`,
@@ -117,29 +268,67 @@ export default function Gastos() {
       <PageHeader
         title="Gastos"
         subtitle={`${entityType} · ${fuente === 'plan' ? 'Plan' : 'Ejecución'} ${selectedYear}`}
+        actions={
+          <div className="flex rounded border border-[var(--color-rule)] overflow-hidden text-xs font-medium">
+            <button
+              onClick={() => setVista('politica')}
+              className={`px-3 py-1.5 transition-colors ${vista === 'politica' ? 'bg-[var(--color-accent)] text-white' : 'text-[var(--color-ink-muted)] hover:bg-gray-50'}`}
+            >
+              Por política
+            </button>
+            <button
+              onClick={() => setVista('economica')}
+              className={`px-3 py-1.5 transition-colors ${vista === 'economica' ? 'bg-[var(--color-accent)] text-white' : 'text-[var(--color-ink-muted)] hover:bg-gray-50'}`}
+            >
+              Por capítulo
+            </button>
+          </div>
+        }
       />
 
-      <ContextBox title="Clasificación económica del gasto">
-        <p>
-          Los gastos públicos se clasifican según su <strong>naturaleza económica</strong>:{' '}
-          personal (nóminas y cotizaciones), bienes y servicios, gastos financieros (intereses de
-          la deuda), transferencias corrientes (pensiones, subvenciones) e inversiones reales
-          (infraestructuras).
-        </p>
-        <p>
-          El capítulo 4 (Transferencias corrientes) incluye las pensiones de la Seguridad Social,
-          las transferencias a CCAA y las subvenciones a empresas y familias. En el Estado,
-          representa habitualmente el mayor bloque de gasto operacional.
-        </p>
+      <ContextBox title="Clasificación del gasto público">
+        {vista === 'politica' ? (
+          <>
+            <p>
+              La clasificación por <strong>políticas de gasto</strong> agrupa el presupuesto
+              consolidado según su finalidad: Pensiones, Defensa, Sanidad, Educación,
+              Infraestructuras, Deuda Pública, etc. Responde a la pregunta{' '}
+              <em>¿para qué gasta el Estado?</em> con mayor detalle que la clasificación COFOG,
+              pero sin la granularidad de los programas presupuestarios individuales.
+            </p>
+            <p>
+              Los datos proceden del <strong>fichero consolidado del PGE</strong> publicado
+              por la SEPG (Secretaría General de Presupuestos y Gastos), hoja de{' '}
+              &ldquo;Políticas de gasto&rdquo;. Incluye Estado, Seguridad Social, Organismos
+              Autónomos y resto de entidades del sector público administrativo. Años 2016–presente.
+              El treemap muestra 6 grupos funcionales: haz <strong>clic en un grupo</strong> para
+              ver el detalle de sus políticas; clic en el breadcrumb inferior para volver.
+            </p>
+          </>
+        ) : (
+          <>
+            <p>
+              Los gastos públicos se clasifican según su <strong>naturaleza económica</strong>:{' '}
+              personal (nóminas y cotizaciones), bienes y servicios, gastos financieros (intereses de
+              la deuda), transferencias corrientes (pensiones, subvenciones) e inversiones reales
+              (infraestructuras).
+            </p>
+            <p>
+              El capítulo 4 (Transferencias corrientes) incluye las pensiones de la Seguridad Social,
+              las transferencias a CCAA y las subvenciones a empresas y familias. En el Estado,
+              representa habitualmente el mayor bloque de gasto operacional.
+            </p>
+          </>
+        )}
       </ContextBox>
 
-      <InsightsPanel insights={insights} isLoading={loading} />
+      <InsightsPanel insights={insights} isLoading={loadingCaps} />
 
       {/* KPI cards */}
       <div className="grid grid-cols-2 gap-6 sm:grid-cols-3">
         <KpiCard
           title={`Gasto operacional (${fuente})`}
-          value={loading ? '—' : formatEur(totalOp)}
+          value={loadingCaps ? '—' : formatEur(totalOp)}
           trendValue={formatPct(yoyRatio) ? `${formatPct(yoyRatio)} vs año anterior` : undefined}
           trend={formatPct(yoyRatio) ? (yoyRatio! <= 0 ? 'up' : 'down') : undefined}
           subtitle={`${selectedYear} · caps. 1–7`}
@@ -152,120 +341,209 @@ export default function Gastos() {
         />
         <KpiCard
           title="Gasto total (incl. fin.)"
-          value={loading ? '—' : formatEur(total)}
+          value={loadingCaps ? '—' : formatEur(total)}
           subtitle={`Caps. 1–9 · ${selectedYear}`}
         />
       </div>
 
-      {/* Bar chart — gastos por capítulo */}
-      <section>
-        <div className="chart-card-rule bg-white border border-[var(--color-rule)] px-5 pt-4 pb-2">
-          <h2 className="text-sm font-semibold text-[var(--color-ink)] mb-1">
-            Gastos por capítulo económico · {selectedYear}
-          </h2>
-          <p className="text-xs text-[var(--color-ink-muted)] mb-4">
-            Capítulos operacionales (1–7) en millones de €.
-          </p>
-          {loading ? (
-            <ChartSkeleton height={280} />
-          ) : (
-            <BarChart
-              categories={barCats}
-              series={[{ name: 'Gasto', data: barData, color: '#326891' }]}
-              horizontal
-              height={280}
-            />
-          )}
-        </div>
-        <p className="mt-2 text-[0.7rem] text-[var(--color-ink-faint)]">
-          Fuente: SEPG (plan) / IGAE (ejecución).
-        </p>
-      </section>
-
-      {/* Evolución histórica por capítulo */}
-      <section>
-        <div className="chart-card-rule bg-white border border-[var(--color-rule)] px-5 pt-4 pb-2">
-          <h2 className="text-sm font-semibold text-[var(--color-ink)] mb-1">
-            Evolución del gasto por capítulo · {entityType}
-          </h2>
-          <p className="text-xs text-[var(--color-ink-muted)] mb-4">
-            Serie histórica en millones de €. Capítulos operacionales.
-          </p>
-          {loading ? (
-            <ChartSkeleton height={300} />
-          ) : (
-            <LineChart
-              categories={histCategories}
-              series={histSeries}
-              height={300}
-              smooth
-            />
-          )}
-        </div>
-        <p className="mt-2 text-[0.7rem] text-[var(--color-ink-faint)]">
-          Fuente: SEPG (plan) / IGAE (ejecución).
-        </p>
-      </section>
-
-      {/* Table */}
-      <section>
-        <h2 className="text-sm font-semibold text-[var(--color-ink)] mb-3">
-          Desglose por capítulo · {selectedYear}
-        </h2>
-        <div className="overflow-x-auto border border-[var(--color-rule)] bg-white">
-          <table className="data-table w-full">
-            <thead>
-              <tr>
-                <th>Cap.</th>
-                <th>Descripción</th>
-                <th>Importe (M€)</th>
-                <th>% del gasto operacional</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr>
-                  <td colSpan={4} className="text-center text-[var(--color-ink-muted)] py-8">
-                    Cargando…
-                  </td>
-                </tr>
-              ) : (
-                caps.map((c) => (
-                  <tr key={c.capitulo}>
-                    <td className="font-mono">{c.capitulo}</td>
-                    <td>
-                      {CAPITULO_GASTOS[c.capitulo] ?? '—'}
-                      {CAPITULO_GASTOS_TOOLTIP[c.capitulo] && (
-                        <InfoTooltip content={CAPITULO_GASTOS_TOOLTIP[c.capitulo]} />
-                      )}
-                    </td>
-                    <td>{formatEur(c.importe)}</td>
-                    <td>
-                      {CAPS_OPERACIONALES.includes(c.capitulo) && totalOp > 0
-                        ? `${((c.importe / totalOp) * 100).toLocaleString('es-ES', {
-                            maximumFractionDigits: 1,
-                          })}%`
-                        : '—'}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-            {!loading && caps.length > 0 && (
-              <tfoot>
-                <tr className="total-row">
-                  <td colSpan={2}>Total operacional (caps. 1–7)</td>
-                  <td>{formatEur(totalOp)}</td>
-                  <td>100,0%</td>
-                </tr>
-              </tfoot>
+      {/* ── VISTA: POLÍTICAS DE GASTO ───────────────────────────────────────── */}
+      {vista === 'politica' && (
+        <>
+          {/* Treemap */}
+          <div className="border border-[var(--color-rule)] bg-white px-4 pt-4 pb-3">
+            <h2 className="text-sm font-semibold text-[var(--color-ink)] mb-1">
+              Distribución del gasto por política · {politicaYear}
+            </h2>
+            <p className="text-xs text-[var(--color-ink-muted)] mb-3">
+              Millones de euros. PGE consolidado (Estado + SS + OO.AA.). Clic en un grupo para ver el desglose por política; clic en el breadcrumb inferior para volver.
+            </p>
+            {loadingPoliticas ? (
+              <ChartSkeleton height={420} />
+            ) : treemapData.length > 0 ? (
+              <TreemapChart data={treemapData} height={420} />
+            ) : (
+              <p className="py-8 text-center text-sm text-[var(--color-ink-muted)]">Sin datos para {politicaYear}.</p>
             )}
-          </table>
-        </div>
-        <p className="mt-2 text-[0.7rem] text-[var(--color-ink-faint)]">
-          Fuente: SEPG (plan) / IGAE (ejecución). El capítulo 5 (ingresos patrimoniales) no aparece en gastos.
-        </p>
-      </section>
+          </div>
+
+          {/* Tabla ranking políticas */}
+          {!loadingPoliticas && politicas.length > 0 && (
+            <div className="overflow-x-auto border border-[var(--color-rule)] bg-white">
+              <table className="data-table w-full">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Política de gasto</th>
+                    <th>Importe (M€)</th>
+                    <th>% del total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {politicas.map((p, i) => (
+                    <tr key={p.politica_nom}>
+                      <td className="font-mono text-[var(--color-ink-muted)]">{i + 1}</td>
+                      <td className="font-medium">
+                        <span
+                          className="mr-2 inline-block h-2 w-2 rounded-full"
+                          style={{ backgroundColor: POLITICA_COLORS[p.politica_nom] ?? '#999' }}
+                        />
+                        {p.politica_nom}
+                      </td>
+                      <td>{formatEur(p.importe)}</td>
+                      <td>
+                        {totalPoliticas > 0
+                          ? `${((p.importe / totalPoliticas) * 100).toLocaleString('es-ES', { maximumFractionDigits: 1 })}%`
+                          : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="total-row">
+                    <td colSpan={2}>Total</td>
+                    <td>{formatEur(totalPoliticas)}</td>
+                    <td>100,0%</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+
+          {/* Evolución histórica top 10 políticas */}
+          <div className="border border-[var(--color-rule)] bg-white px-4 pt-4 pb-3">
+            <h2 className="text-sm font-semibold text-[var(--color-ink)] mb-1">
+              Evolución histórica · Top 10 políticas de gasto
+            </h2>
+            <p className="text-xs text-[var(--color-ink-muted)] mb-3">
+              Millones de euros. PGE consolidado, 2016–presente.
+            </p>
+            {loadingPoliticas ? (
+              <ChartSkeleton height={320} />
+            ) : politicaHistYears.length > 0 ? (
+              <LineChart
+                categories={politicaHistYears.map(String)}
+                series={politicaLineSeries}
+                height={320}
+                smooth
+              />
+            ) : (
+              <p className="py-8 text-center text-sm text-[var(--color-ink-muted)]">Sin datos históricos.</p>
+            )}
+          </div>
+
+          <p className="text-[0.7rem] text-[var(--color-ink-faint)]">
+            Fuente: SEPG — Presupuestos Generales del Estado Consolidados, hoja &ldquo;Políticas de gasto&rdquo; (caps. 1–8). M€.
+          </p>
+        </>
+      )}
+
+      {/* ── VISTA: CLASIFICACIÓN ECONÓMICA (CAPÍTULOS) ──────────────────────── */}
+      {vista === 'economica' && (
+        <>
+          <section>
+            <div className="chart-card-rule bg-white border border-[var(--color-rule)] px-5 pt-4 pb-2">
+              <h2 className="text-sm font-semibold text-[var(--color-ink)] mb-1">
+                Gastos por capítulo económico · {selectedYear}
+              </h2>
+              <p className="text-xs text-[var(--color-ink-muted)] mb-4">
+                Capítulos operacionales (1–7) en millones de €.
+              </p>
+              {loadingCaps ? (
+                <ChartSkeleton height={280} />
+              ) : (
+                <BarChart
+                  categories={barCats}
+                  series={[{ name: 'Gasto', data: barData, color: '#326891' }]}
+                  horizontal
+                  height={280}
+                />
+              )}
+            </div>
+            <p className="mt-2 text-[0.7rem] text-[var(--color-ink-faint)]">
+              Fuente: SEPG (plan) / IGAE (ejecución).
+            </p>
+          </section>
+
+          <section>
+            <div className="chart-card-rule bg-white border border-[var(--color-rule)] px-5 pt-4 pb-2">
+              <h2 className="text-sm font-semibold text-[var(--color-ink)] mb-1">
+                Evolución del gasto por capítulo · {entityType}
+              </h2>
+              <p className="text-xs text-[var(--color-ink-muted)] mb-4">
+                Serie histórica en millones de €. Capítulos operacionales.
+              </p>
+              {loadingCaps ? (
+                <ChartSkeleton height={300} />
+              ) : (
+                <LineChart
+                  categories={histCategories}
+                  series={histSeries}
+                  height={300}
+                  smooth
+                />
+              )}
+            </div>
+            <p className="mt-2 text-[0.7rem] text-[var(--color-ink-faint)]">
+              Fuente: SEPG (plan) / IGAE (ejecución).
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-sm font-semibold text-[var(--color-ink)] mb-3">
+              Desglose por capítulo · {selectedYear}
+            </h2>
+            <div className="overflow-x-auto border border-[var(--color-rule)] bg-white">
+              <table className="data-table w-full">
+                <thead>
+                  <tr>
+                    <th>Cap.</th>
+                    <th>Descripción</th>
+                    <th>Importe (M€)</th>
+                    <th>% del gasto operacional</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {loadingCaps ? (
+                    <tr>
+                      <td colSpan={4} className="text-center text-[var(--color-ink-muted)] py-8">Cargando…</td>
+                    </tr>
+                  ) : (
+                    caps.map((c) => (
+                      <tr key={c.capitulo}>
+                        <td className="font-mono">{c.capitulo}</td>
+                        <td>
+                          {CAPITULO_GASTOS[c.capitulo] ?? '—'}
+                          {CAPITULO_GASTOS_TOOLTIP[c.capitulo] && (
+                            <InfoTooltip content={CAPITULO_GASTOS_TOOLTIP[c.capitulo]} />
+                          )}
+                        </td>
+                        <td>{formatEur(c.importe)}</td>
+                        <td>
+                          {CAPS_OPERACIONALES.includes(c.capitulo) && totalOp > 0
+                            ? `${((c.importe / totalOp) * 100).toLocaleString('es-ES', { maximumFractionDigits: 1 })}%`
+                            : '—'}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+                {!loadingCaps && caps.length > 0 && (
+                  <tfoot>
+                    <tr className="total-row">
+                      <td colSpan={2}>Total operacional (caps. 1–7)</td>
+                      <td>{formatEur(totalOp)}</td>
+                      <td>100,0%</td>
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
+            </div>
+            <p className="mt-2 text-[0.7rem] text-[var(--color-ink-faint)]">
+              Fuente: SEPG (plan) / IGAE (ejecución). El capítulo 5 (ingresos patrimoniales) no aparece en gastos.
+            </p>
+          </section>
+        </>
+      )}
     </div>
   )
 }

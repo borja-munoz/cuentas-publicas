@@ -18,7 +18,10 @@ from scraper.db import connect, create_schema, row_counts, DB_PATH
 
 console = Console()
 
-SOURCES = ["aeat", "sepg", "igae", "seguridad_social", "transferencias_ccaa", "ccaa"]
+SOURCES = [
+    "aeat", "sepg", "igae", "seguridad_social", "transferencias_ccaa", "ccaa",
+    "cofog", "iva_tipos", "pensiones", "sepg_politicas",
+]
 
 
 @click.group()
@@ -94,6 +97,18 @@ def _run_source(conn, source: str, year: int | None) -> None:
     elif source == "ccaa":
         from scraper.scrapers.ccaa import run as run_ccaa
         run_ccaa(conn, year=year)
+    elif source == "cofog":
+        from scraper.scrapers.igae_cofog import run as run_cofog
+        run_cofog(conn, year=year)
+    elif source == "iva_tipos":
+        from scraper.scrapers.iva_tipos import run as run_iva_tipos
+        run_iva_tipos(conn, year=year)
+    elif source == "pensiones":
+        from scraper.scrapers.pensiones import run as run_pensiones
+        run_pensiones(conn, year=year)
+    elif source == "sepg_politicas":
+        from scraper.scrapers.sepg_politicas import run as run_politicas
+        run_politicas(conn, year=year)
     else:
         raise ValueError(f"Fuente desconocida: {source}")
 

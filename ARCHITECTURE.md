@@ -130,6 +130,9 @@ cuentas-publicas/
 | Presupuesto Seguridad Social | SEPG | Excel | 2005–2025 | Anual, por capítulo |
 | Transferencias a CCAA | Mº Hacienda SGCIEF (derivado) | Derivado | 2002–2023 | Por CCAA, caps. 4 y 7 |
 | Presupuestos CCAA (consolidado) | Mº Hacienda SGCIEF | Excel | 2002–2023 | Por CCAA, capítulo, plan y ejecución |
+| Gasto funcional COFOG | Eurostat `gov_10a_exp` | JSON-stat REST API | 1995–2023 | AAPP + 4 subsectores, 10 funciones COFOG |
+| IVA por tipo impositivo | AEAT Modelo 390 | CSV estático | 2005–2022 | Nacional, 3 tipos (21%/10%/4%) |
+| Pensiones contributivas | Mº Inclusión BEL PEN-3 | HTML table | 2000–2024 | 5 tipos de pensión, número e importe medio |
 
 **Notas de descarga:**
 - **AEAT**: ficheros IART por año (2017–2024); histórico 1995–2016 en hoja "1.6" del último IART. User-Agent estándar.
@@ -138,6 +141,9 @@ cuentas-publicas/
 - **2020**: sin PGE aprobado (prórroga de 2018). Se inserta sintéticamente copiando datos de 2018 en `_insert_prorroga_2020()`.
 - **Transferencias CCAA**: el desglose por CCAA no está en ficheros SEPG. Se derivan de `ccaa_ingresos` (caps. 4 y 7 de los presupuestos liquidados de cada CCAA).
 - **Presupuestos CCAA**: portal SGCIEF, formulario ASP.NET. Un Excel por CCAA×año. Cobertura 2002–2023.
+- **COFOG (Eurostat)**: REST API JSON-stat en `https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/gov_10a_exp`. Sin autenticación. 5 peticiones (una por sector). Pausa 0,5s entre peticiones. Cobertura ~1995–2023.
+- **IVA tipos (AEAT)**: CSV estático `modelo390.csv`. Filtro `TIPOPER=0` (régimen general total). Agregado nacional sumando todas las CCAA. Columnas M390_1–6 = base/cuota por tipo (general, reducido, superreducido). Unidades en euros → dividir ÷1e6 para M€.
+- **Pensiones (mites.gob.es)**: tabla HTML en BEL PEN-3. SSL verification deshabilitada (`ssl.CERT_NONE`) por certificado con CA no estándar.
 
 ---
 
@@ -258,6 +264,35 @@ CREATE TABLE ccaa_gastos (
     importe     DECIMAL(18,2),
     PRIMARY KEY (year, ccaa_cod, capitulo, fuente)
 );
+
+-- Gasto funcional COFOG (Eurostat gov_10a_exp)
+CREATE TABLE gastos_funcion (
+    year       INTEGER NOT NULL,
+    sector     VARCHAR NOT NULL,   -- 'S13' AAPP, 'S1311' Estado, 'S1312' CCAA, 'S1313' CCLL, 'S1314' SS
+    cofog_cod  VARCHAR NOT NULL,   -- 'GF01'–'GF10'
+    cofog_nom  VARCHAR NOT NULL,
+    importe    DECIMAL(18,2),      -- M€ a precios corrientes
+    PRIMARY KEY (year, sector, cofog_cod)
+);
+
+-- IVA por tipo impositivo (AEAT Modelo 390)
+CREATE TABLE recaudacion_iva_tipo (
+    year             INTEGER NOT NULL,
+    tipo             VARCHAR NOT NULL,   -- 'general' (21%), 'reducido' (10%), 'superreducido' (4%)
+    base_imponible   DECIMAL(18,2),      -- M€
+    cuota_devengada  DECIMAL(18,2),      -- M€
+    PRIMARY KEY (year, tipo)
+);
+
+-- Pensiones contributivas SS (Mº Inclusión BEL PEN-3)
+CREATE TABLE pensiones_ss (
+    year           INTEGER NOT NULL,
+    tipo           VARCHAR NOT NULL,   -- 'jubilacion', 'incapacidad', 'viudedad', 'orfandad', 'favor_familiar'
+    num_pensiones  INTEGER,            -- número de pensiones en vigor
+    importe_total  DECIMAL(18,2),      -- M€/año (importe mensual × 12)
+    pension_media  DECIMAL(10,2),      -- €/mes
+    PRIMARY KEY (year, tipo)
+);
 ```
 
 ### Vistas pre-calculadas
@@ -340,6 +375,14 @@ formatPct(0.0005) // → null  (suprime cambios triviales < 0,1%)
 
 Los valores de `obligaciones_reconocidas` en `gastos_ejecucion` están en **K€**. Las queries dividen entre 1000: `SUM(obligaciones_reconocidas) / 1000.0`.
 
+### Eurostat JSON-stat (gastos_funcion)
+
+La API Eurostat `gov_10a_exp` devuelve JSON-stat: un array `value` plano indexado con strides por dimensión (`id`, `size`). El scraper calcula el índice flat como `sum(pos_dim × stride_dim)` con strides calculados de derecha a izquierda desde `size`. Se hacen 5 peticiones (una por sector), no 1 masiva, para evitar timeouts de la API.
+
+### mites.gob.es SSL (pensiones_ss)
+
+El servidor de mites.gob.es usa un certificado con CA no estándar. El scraper usa `urllib.request` con `ssl.CERT_NONE` (sin verificación). Esto es aceptable porque el destino es una fuente oficial pública de solo lectura.
+
 ### InfoTooltip
 
 Renderiza mediante `createPortal` en `document.body` con `position: fixed`, evitando recorte por `overflow: hidden/auto` de la tabla. La posición (arriba/abajo del botón) se calcula con `getBoundingClientRect()` en el momento de mostrar.
@@ -393,10 +436,13 @@ export interface Insight {
 | Ingresos | Peso impuestos (cap 1+2) · Mayor fuente · Dependencia de deuda (cap 9) |
 | Gastos | Peso transferencias corrientes (cap 4) · Variación YoY · Gasto en personal |
 | Impuestos (AEAT) | Variación recaudación YoY · Ratio devoluciones IVA · Máximo histórico |
+| IVA por tipo | Tipo efectivo medio · % base a tipo general/reducido · Cuota total · Tipo superreducido |
 | Comparativa | Tasa de ejecución global · Crédito no ejecutado · Capítulo menos ejecutado |
 | Transferencias | Mayor receptora · Total nacional · % corrientes vs capital |
 | CCAA Overview | CCAA con mayor gasto · Mayor déficit · Tasa de ejecución media |
 | CCAA Detalle | — (KPI cards integrados en la cabecera; sin InsightsPanel) |
+| Gasto por función | Mayor función COFOG · Estado de bienestar (GF10+GF07+GF09) · Total AAPP |
+| Pensiones | Gasto jubilación · Pensiones viudedad · Total contributivas · Pensión media global |
 
 ### Layout estándar de página
 
