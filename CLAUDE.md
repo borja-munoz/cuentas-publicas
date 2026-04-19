@@ -54,3 +54,16 @@ Full design: [ARCHITECTURE.md](ARCHITECTURE.md) — Implementation plan: [PLAN.m
 - GitHub Pages; base URL `/cuentas-publicas/` set in `vite.config.ts`
 - `deploy.yml`: build on push to `main` → publish `web/dist/` to `gh-pages` branch
 - `update-data.yml`: cron on 1st of each month → run scraper → commit `.duckdb` → redeploy
+
+## Workflow por fase
+
+Toda fase o milestone del plan (ver [PLAN.md](PLAN.md)) sigue este protocolo. No se escribe código sin haber documentado primero el diseño.
+
+1. **Al inicio de cada fase o milestone** — actualizar [ARCHITECTURE.md](ARCHITECTURE.md) con el diseño de lo que se va a implementar: nuevas tablas y columnas, nuevas rutas, componentes, fuentes de datos, tokens y patrones. El diseño debe quedar documentado antes de empezar a editar código de producción.
+2. **Durante la implementación** — seguir el diseño documentado. Si aparece una desviación necesaria (decisión que cambia el diseño inicial), anotarla para reflejarla en la actualización de cierre.
+3. **Al cierre de cada fase**, antes de darla por completada:
+   - Verificar que todos los entregables listados en los milestones de la fase están implementados (recorrer los `[ ]` y marcarlos).
+   - Si hubo desviaciones respecto al diseño inicial, actualizar [ARCHITECTURE.md](ARCHITECTURE.md) para reflejar el estado real del sistema.
+   - Marcar la fase como ✅ tanto en el resumen de fases como en la cabecera de la fase dentro de [PLAN.md](PLAN.md).
+
+Este orden (diseño → implementación → verificación → cierre) mantiene documentación y código sincronizados y obliga a pensar el diseño antes de escribir nada.
