@@ -2,17 +2,25 @@ import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import TopBar from './TopBar'
 
-const NAV_ITEMS = [
-  { to: '/', label: 'Inicio', end: true },
-  { to: '/ingresos', label: 'Ingresos' },
-  { to: '/ingresos/impuestos', label: 'Impuestos AEAT', indent: true },
-  { to: '/ingresos/impuestos/iva', label: 'IVA por tipo', indent: true },
-  { to: '/gastos', label: 'Gastos' },
-  { to: '/gastos/funcion', label: 'Gasto por función', indent: true },
-  { to: '/gastos/pensiones', label: 'Pensiones', indent: true },
-  { to: '/comparativa', label: 'Plan vs. Ejecución' },
-  { to: '/transferencias', label: 'Transferencias CCAA' },
-  { to: '/ccaa', label: 'CCAA' },
+type NavItem =
+  | { kind: 'group'; label: string }
+  | { kind: 'link'; to: string; label: string; end?: boolean; indent?: boolean }
+
+const NAV: NavItem[] = [
+  { kind: 'link', to: '/', label: 'Inicio', end: true },
+  { kind: 'group', label: 'Estado' },
+  { kind: 'link', to: '/estado/ingresos', label: 'Ingresos' },
+  { kind: 'link', to: '/estado/ingresos/impuestos', label: 'Impuestos AEAT', indent: true },
+  { kind: 'link', to: '/estado/ingresos/impuestos/iva', label: 'IVA por tipo', indent: true },
+  { kind: 'link', to: '/estado/gastos', label: 'Gastos' },
+  { kind: 'link', to: '/estado/gastos/funcion', label: 'Gasto por función', indent: true },
+  { kind: 'group', label: 'Seguridad Social' },
+  { kind: 'link', to: '/ss/ingresos', label: 'Ingresos' },
+  { kind: 'link', to: '/ss/gastos', label: 'Gastos' },
+  { kind: 'link', to: '/ss/gastos/pensiones', label: 'Pensiones', indent: true },
+  { kind: 'group', label: 'CCAA' },
+  { kind: 'link', to: '/ccaa', label: 'Comunidades' },
+  { kind: 'link', to: '/ccaa/transferencias', label: 'Ingresos', indent: true },
 ]
 
 export default function AppShell() {
@@ -35,25 +43,37 @@ export default function AppShell() {
 
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-0.5">
-          {NAV_ITEMS.map(({ to, label, end, indent }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={end}
-              onClick={() => setSidebarOpen(false)}
-              className={({ isActive }) =>
-                `flex items-center rounded px-3 py-2 text-sm transition-colors ${
-                  indent ? 'ml-3 text-xs' : ''
-                } ${
-                  isActive
-                    ? 'bg-[var(--color-accent)]/10 font-semibold text-[var(--color-accent)]'
-                    : 'text-[var(--color-ink-muted)] hover:bg-gray-50 hover:text-[var(--color-ink)]'
-                }`
-              }
-            >
-              {label}
-            </NavLink>
-          ))}
+          {NAV.map((item, i) => {
+            if (item.kind === 'group') {
+              return (
+                <p
+                  key={i}
+                  className="mt-3 mb-1 px-3 text-[0.65rem] font-semibold uppercase tracking-widest text-[var(--color-ink-faint)]"
+                >
+                  {item.label}
+                </p>
+              )
+            }
+            return (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.end}
+                onClick={() => setSidebarOpen(false)}
+                className={({ isActive }) =>
+                  `flex items-center rounded px-3 py-2 text-sm transition-colors ${
+                    item.indent ? 'ml-3 text-xs' : ''
+                  } ${
+                    isActive
+                      ? 'bg-[var(--color-accent)]/10 font-semibold text-[var(--color-accent)]'
+                      : 'text-[var(--color-ink-muted)] hover:bg-gray-50 hover:text-[var(--color-ink)]'
+                  }`
+                }
+              >
+                {item.label}
+              </NavLink>
+            )
+          })}
         </nav>
       </aside>
 

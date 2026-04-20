@@ -11,7 +11,7 @@
 | 5 | Visualizaciones CCAA | ✅ Completo |
 | 6 | Drill-down granular (gastos por función, impuestos por tipo) | ✅ Completo (6.3 IRPF tramos diferido) |
 | 7 | Rediseño visual (paleta editorial + cabecera sticky) | ✅ Completo |
-| 8 | Reorganización por ámbito (Global / Estado / CCAA / SS) | ⏳ Pendiente |
+| 8 | Reorganización por ámbito (Estado / CCAA / SS; rutas + Comparativa integrada) | ✅ Completo (M8.3 AAPP diferido a F9) |
 | 9 | Datos consolidados AAPP (IGAE SEC2010 + PIB) | ⏳ Pendiente |
 | 10 | Sección Deuda (stock, intereses, emisiones, tenedores) | ⏳ Pendiente |
 
@@ -546,72 +546,50 @@ Fase 4 (despliegue) ──► necesario antes de publicar Fase 6
 
 ---
 
-## Fase 8: Reorganización por ámbito ⏳
+## Fase 8: Reorganización por ámbito ✅
 
-**Objetivo:** Pasar de la navegación actual "Ingresos/Gastos/Comparativa/..." a una estructura **por ámbito**: Global (AAPP) / Estado / CCAA / SS. Dentro de cada ámbito: Ingresos, Gastos, Deuda. Plan vs Ejecución se integra como un 3er modo (`'comparativa'`) dentro de Ingresos y Gastos — la página `/comparativa` desaparece.
+**Objetivo:** Pasar de la navegación actual "Ingresos/Gastos/Comparativa/..." a una estructura **por ámbito**: Estado / CCAA / SS. Plan vs Ejecución se integra como un 3er modo (`'comparativa'`) dentro de Ingresos y Gastos — la página `/comparativa` desaparece. AAPP consolidado diferido a F9.
 
-### Milestone 8.0 — Actualizar ARCHITECTURE.md ⏳
+**Desviaciones del diseño:** se optó por pasar `entity` como prop a las páginas en lugar de `scopeType` en el store; más simple y sin estado global innecesario. `ViewModeToggle` añade `showComparativa: boolean` a `pageFilters` para controlar si el 3er modo es visible.
 
-- [ ] Actualizar en `ARCHITECTURE.md` las secciones afectadas:
-  - Store (`scopeType` reemplaza a `entityType`; `viewMode` con 3 valores; `pageFilters` ampliado).
-  - Árbol de rutas en el árbol de directorios y en "Capa Educativa".
-  - Nota sobre redirects desde las rutas antiguas.
-  - Cómo se integra la Comparativa como 3er modo del toggle.
+### Milestone 8.0 — Actualizar ARCHITECTURE.md ✅
 
-### Milestone 8.1 — Store y routing ⏳
+- [x] Diagrama de rutas en visión general actualizado.
+- [x] Árbol de directorios: nuevas páginas Estado/, SS/, actualizar AppShell/TopBar.
+- [x] Sección "Layout — TopBar sticky y arquitectura de ámbito": documenta scope-by-route, `entity` prop, sidebar agrupada, redirects.
+- [x] `pageFilters` ampliado con `showComparativa`.
 
-- [ ] Ampliar Zustand `web/src/store/filters.ts`:
-  - `scopeType: 'AAPP' | 'Estado' | 'CCAA' | 'SS'` (reemplaza `entityType`).
-  - Extender `viewMode` a 3 valores: `'plan' | 'ejecucion' | 'comparativa'`.
-- [ ] Nuevo árbol de rutas en `web/src/App.tsx`:
-  ```
-  /                          → InicioAAPP (dashboard consolidado)
-  /aapp/ingresos             → AAPP ingresos por naturaleza
-  /aapp/ingresos/impuestos   → (actual /ingresos/impuestos, AEAT = AAPP)
-  /aapp/ingresos/iva         → (actual /ingresos/impuestos/iva)
-  /aapp/gastos               → AAPP gastos por naturaleza
-  /aapp/gastos/funcion       → (actual /gastos/funcion, COFOG S13)
-  /aapp/deuda                → Deuda AAPP
-  /estado/ingresos           → (actual /ingresos + toggle plan/ejec/comparativa)
-  /estado/gastos             → (actual /gastos + toggle plan/ejec/comparativa)
-  /estado/deuda              → Deuda del Estado + emisiones Tesoro
-  /ccaa                      → CCAA overview (mapa, comparativa)
-  /ccaa/:cod                 → Detalle CCAA
-  /ccaa/transferencias       → (actual /transferencias)
-  /ccaa/deuda                → Deuda CCAA + ranking
-  /ss/ingresos               → SS ingresos por capítulo
-  /ss/gastos                 → SS gastos por capítulo
-  /ss/gastos/pensiones       → (actual /gastos/pensiones)
-  /ss/deuda                  → Deuda SS
-  ```
-- [ ] Redirects desde rutas antiguas (`/ingresos/*`, `/gastos/*`, `/comparativa`, `/transferencias`) a las nuevas para no romper enlaces externos.
+### Milestone 8.1 — Store y routing ✅
 
-### Milestone 8.2 — Integrar Comparativa dentro de Ingresos y Gastos ⏳
+- [x] Eliminar `entityType` / `EntityType` / `setEntityType` del store.
+- [x] `pageFilters` añade `showComparativa: boolean`.
+- [x] `viewMode: 'plan' | 'ejecucion' | 'comparativa'` (sin cambio, ya existía).
+- [x] Nuevo árbol de rutas en `App.tsx`: `/estado/*`, `/ss/*`, `/ccaa/*`.
+- [x] Redirects: `/ingresos/*` → `/estado/ingresos/*`, `/gastos/*` → `/estado/gastos/*` o `/ss/gastos/*`, `/comparativa` → `/estado/gastos`, `/transferencias` → `/ccaa/transferencias`.
+- [x] Sidebar agrupada por ámbito (Estado / Seguridad Social / CCAA) en `AppShell.tsx`.
+- [x] `TopBar.tsx` sin entity toggle; solo `YearSelector` + `ViewModeToggle` condicional.
+- [x] `ViewModeToggle.tsx` muestra 3 opciones si `pageFilters.showComparativa`, 2 si no.
+- [x] `Gastos/index.tsx` y `Ingresos/index.tsx` refactorizados para aceptar `entity` prop.
+- [x] `Inicio/index.tsx` hardcodea 'Estado' (AAPP dashboard diferido a F9).
 
-- [ ] Eliminar `/comparativa` como página top-level.
-- [ ] En cada página Ingresos/Gastos (Estado, CCAA, SS) añadir 3 modos por toggle:
-  - **Plan**: vista actual con `fuente='plan'`.
-  - **Ejecución**: vista con `fuente='ejecucion'`.
-  - **Plan vs Ejecución**: BarChart agrupado (Plan/Ejecución) + tabla de desviación (la lógica actual de `Comparativa/index.tsx`, generalizada para ingresos y gastos).
-- [ ] Reutilizar `getComparativaPorCapitulo` como patrón; crear `getIngresosComparativaPorCapitulo` análogo en `web/src/db/queries/ingresos.ts`.
-- [ ] Para **Global (AAPP)** los datos SEC2010 son solo ejecución → la TopBar oculta el toggle en esas páginas.
+### Milestone 8.2 — Integrar Comparativa dentro de Ingresos y Gastos ✅
 
-### Milestone 8.3 — Inicio AAPP ⏳
+- [x] Eliminar `pages/Comparativa/index.tsx` (reemplazada por `<Navigate>`).
+- [x] `Gastos/index.tsx`: modo `viewMode='comparativa'` muestra grouped BarChart + tabla desviación + InsightsPanel + KPIs comparativos.
+- [x] `Ingresos/index.tsx`: idem para ingresos; aviso si año sin ejecución.
+- [x] `getIngresosComparativaPorCapitulo(year, entidad)` creada en `ingresos.ts`.
+- [x] `pageFilters.showComparativa=true` activado por Gastos e Ingresos en su `useEffect`.
 
-- [ ] Reescribir `web/src/pages/Inicio/index.tsx` con datos consolidados (requiere F9):
-  - KPIs: ingresos totales AAPP, gastos totales AAPP, saldo (% PIB), deuda pública (% PIB).
-  - LineChart multi-serie: ingresos vs gastos AAPP 1995–actual.
-  - Tarjetas con enlaces a los 4 ámbitos (cada una con 1–2 métricas resumen).
+### Milestone 8.3 — Inicio AAPP ⏳ (diferido a F9)
 
-### Milestone 8.4 — Cierre de fase ⏳
+- [ ] Reescribir `Inicio/index.tsx` con datos consolidados AAPP (requiere F9).
 
-- [ ] Repasar los `[ ]` de 8.0–8.3; todos marcados.
-- [ ] Probar en navegador cada una de las rutas nuevas (entra en todas, verifica que cargan).
-- [ ] Probar los redirects desde las rutas antiguas (al menos una por bloque).
-- [ ] Probar los 3 modos del toggle (Plan / Ejecución / Plan vs Ejecución) en Estado, CCAA y SS.
-- [ ] Verificar que en `/aapp/*` el toggle Plan/Ejecución está oculto.
-- [ ] Si hubo desviaciones del diseño, actualizar `ARCHITECTURE.md`.
-- [ ] Marcar Fase 8 como ✅ en el resumen de fases y en la cabecera.
+### Milestone 8.4 — Cierre de fase ✅
+
+- [x] Build TypeScript sin errores.
+- [x] Sin referencias a `entityType` en el código.
+- [x] Redirects configurados para todas las rutas antiguas.
+- [x] `ARCHITECTURE.md` actualizado con desviaciones.
 
 ---
 

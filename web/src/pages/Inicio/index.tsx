@@ -17,7 +17,7 @@ interface ResumenRow {
 }
 
 export default function Inicio() {
-  const { selectedYear, entityType } = useFilters()
+  const { selectedYear } = useFilters()
   const [data, setData] = useState<ResumenRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -25,14 +25,14 @@ export default function Inicio() {
   useEffect(() => {
     setLoading(true)
     setError(null)
-    getResumenAnual(entityType)
+    getResumenAnual('Estado')
       .then(setData)
       .catch((e) => {
         console.error(e)
         setError(String(e))
       })
       .finally(() => setLoading(false))
-  }, [entityType])
+  }, [])
 
   const current = data.find((d) => d.year === selectedYear)
   const prev = data.find((d) => d.year === selectedYear - 1)
@@ -95,7 +95,7 @@ export default function Inicio() {
       )}
       <PageHeader
         title="Presupuestos Generales del Estado"
-        subtitle={`${entityType} · ${selectedYear}`}
+        subtitle={`Estado · ${selectedYear}`}
       />
 
       <ContextBox title="¿Qué son los Presupuestos Generales del Estado?">
@@ -152,7 +152,7 @@ export default function Inicio() {
       <section>
         <div className="chart-card-rule bg-white border border-[var(--color-rule)] px-5 pt-4 pb-2">
           <h2 className="text-sm font-semibold text-[var(--color-ink)] mb-1">
-            Ingresos y gastos no financieros · {entityType}
+            Ingresos y gastos no financieros · Estado
           </h2>
           <p className="text-xs text-[var(--color-ink-muted)] mb-4">
             Plan presupuestario aprobado, en millones de €. Excluye capítulos 8 y 9 (operaciones financieras).

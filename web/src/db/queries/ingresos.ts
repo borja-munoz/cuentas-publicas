@@ -92,6 +92,35 @@ export async function getTotalIngresosPorAnio(
   }
 }
 
+// Plan vs ejecución de ingresos por capítulo para un año dado
+export async function getIngresosComparativaPorCapitulo(
+  year: number,
+  entidad: string,
+): Promise<{ capitulo: number; plan: number; ejecucion: number; desviacion: number }[]> {
+  return query(`
+    SELECT
+      p.capitulo,
+      CAST(p.importe AS DOUBLE)                           AS plan,
+      CAST(COALESCE(e.importe, 0) AS DOUBLE)              AS ejecucion,
+      CAST(COALESCE(e.importe, 0) - p.importe AS DOUBLE)  AS desviacion
+    FROM (
+      SELECT capitulo, SUM(importe) AS importe
+      FROM cp.ingresos_plan
+      WHERE year = ${year} AND entidad = '${entidad}' AND articulo IS NULL
+        AND capitulo NOT IN (8, 9)
+      GROUP BY capitulo
+    ) p
+    LEFT JOIN (
+      SELECT capitulo, SUM(recaudacion_neta) / 1000.0 AS importe
+      FROM cp.ingresos_ejecucion
+      WHERE year = ${year} AND entidad = '${entidad}' AND articulo IS NULL
+        AND capitulo NOT IN (8, 9)
+      GROUP BY capitulo
+    ) e USING (capitulo)
+    ORDER BY p.capitulo
+  `)
+}
+
 // Total ingresos y gastos por año (para dashboard histórico)
 export async function getResumenAnual(entidad: string): Promise<
   { year: number; ingresos_plan: number; gastos_plan: number }[]

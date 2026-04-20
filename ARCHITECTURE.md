@@ -9,14 +9,15 @@
 │  PIPELINE DE DATOS (Python / CI)         │      │  NAVEGADOR (React + DuckDB WASM)          │
 │                                          │      │                                           │
 │  scrapers/                               │      │  App.tsx                                  │
-│    aeat.py        ──┐                    │      │    ├── Inicio         (dashboard KPIs)    │
-│    igae.py        ──┤                    │      │    ├── Ingresos       (por capítulo)       │
-│    sepg.py        ──┼──► db.py ──► .duckdb ───►│    │     └── Impuestos (detalle AEAT)     │
-│    ss.py          ──┤   (asset estático) │      │    ├── Gastos         (por capítulo)      │
-│    transfer_ccaa.py─┤                    │      │    ├── Comparativa    (plan vs ejecución)  │
-│    ccaa.py        ──┘                    │      │    ├── Transferencias (mapa coroplético)   │
-│                                          │      │    ├── CCAA           (overview)           │
-│                                          │      │    └── CCAA/:cod      (detalle por CCAA)   │
+│    aeat.py        ──┐                    │      │    ├── /                (Inicio KPIs)      │
+│    igae.py        ──┤                    │      │    ├── /estado/ingresos (por capítulo)     │
+│    sepg.py        ──┼──► db.py ──► .duckdb ───►│    │     └── /impuestos (detalle AEAT)    │
+│    ss.py          ──┤   (asset estático) │      │    ├── /estado/gastos   (por capítulo)    │
+│    transfer_ccaa.py─┤                    │      │    ├── /ss/ingresos     (SS)              │
+│    ccaa.py        ──┘                    │      │    ├── /ss/gastos       (SS)              │
+│                                          │      │    ├── /ccaa            (overview + mapa) │
+│                                          │      │    ├── /ccaa/:cod       (detalle CCAA)    │
+│                                          │      │    └── /ccaa/transfer.. (mapa coroplético)│
 │  GitHub Actions                          │      │                                           │
 │    → cron mensual: scraper + commit      │      │  DuckDB WASM (Web Worker)                 │
 │    → trigger: redeploy a GitHub Pages    │      │                                           │
@@ -78,15 +79,15 @@ cuentas-publicas/
 │       │       ├── aeat.ts              # Queries recaudación AEAT + IMPUESTO_COLORS
 │       │       └── ccaa.ts              # Queries CCAA: transferencias, resumen, capítulos
 │       ├── store/
-│       │   └── filters.ts               # Zustand: selectedYear, entityType, viewMode, pageFilters
+│       │   └── filters.ts               # Zustand: selectedYear, viewMode, pageFilters (sin entityType)
 │       ├── components/
 │       │   ├── layout/
-│       │   │   ├── AppShell.tsx          # Sidebar (solo navegación) + TopBar + mobile header
-│       │   │   ├── TopBar.tsx            # Barra sticky: EntityToggle + YearSelector + ViewModeToggle
+│       │   │   ├── AppShell.tsx          # Sidebar (solo navegación, agrupada por ámbito) + TopBar
+│       │   │   ├── TopBar.tsx            # Barra sticky: YearSelector + ViewModeToggle (sin EntityToggle)
 │       │   │   └── PageHeader.tsx        # Título + subtítulo de página
 │       │   ├── filters/
 │       │   │   ├── YearSelector.tsx
-│       │   │   └── ViewModeToggle.tsx    # Plan / Ejecución / Comparativa
+│       │   │   └── ViewModeToggle.tsx    # Plan / Ejecución (por página)
 │       │   ├── charts/
 │       │   │   ├── BarChart.tsx          # ECharts barras (simple, apiladas, agrupadas, horizontal)
 │       │   │   ├── LineChart.tsx         # ECharts líneas multi-serie (series temporales)
@@ -100,11 +101,16 @@ cuentas-publicas/
 │       │       └── InfoTooltip.tsx       # Botón "i" con popover explicativo (portal fixed)
 │       └── pages/
 │           ├── Inicio/index.tsx          # Dashboard: KPIs saldo + líneas ingresos vs gastos
+│           ├── Estado/
+│           │   ├── Ingresos.tsx          # Barras por capítulo + línea histórica + tabla (entity='Estado')
+│           │   └── Gastos.tsx            # Barras por capítulo + plan vs ejec integrado + tabla
+│           ├── SS/
+│           │   ├── Ingresos.tsx          # Igual estructura que Estado/Ingresos (entity='SS')
+│           │   └── Gastos.tsx            # Igual estructura que Estado/Gastos (entity='SS')
 │           ├── Ingresos/
-│           │   ├── index.tsx             # Barras por capítulo + línea histórica + tabla
-│           │   └── Impuestos.tsx         # Líneas IRPF/IVA/Sociedades (1995–2024) + tabla
-│           ├── Gastos/index.tsx          # Barras por capítulo + líneas históricas + tabla
-│           ├── Comparativa/index.tsx     # Barras plan vs ejecución + tabla desviación
+│           │   └── Impuestos.tsx         # Líneas IRPF/IVA/Sociedades (1995–2024) + tabla (AEAT)
+│           ├── Gastos/
+│           │   └── Funcion.tsx           # Gasto funcional COFOG sector S13 AAPP
 │           ├── Transferencias/index.tsx  # Mapa coroplético + ranking + serie histórica
 │           └── CCAA/
 │               ├── index.tsx             # Overview: mapa + drill-down por capítulo + tabla
@@ -372,9 +378,18 @@ Los tokens de color se centralizan en `src/utils/colors.ts` y se exponen como va
 
 Para gráficas con 3+ series se usa el array `CATEGORICAL` (8 colores en orden, el primero es `accent`).
 
-### Layout — TopBar sticky
+### Layout — TopBar sticky y arquitectura de ámbito
 
-Los controles globales (entidad, año, modo) viven en `TopBar.tsx`, una barra `sticky top-0` que aparece encima del contenido en todas las páginas. La sidebar queda exclusivamente para navegación.
+El ámbito (Estado / SS / CCAA) se encoda en la URL, **no** en el store global. No existe `entityType` en Zustand. Las páginas reciben el ámbito como prop estático desde `App.tsx`:
+
+```typescript
+<Route path="estado/ingresos" element={<EstadoIngresos entity="Estado" />} />
+<Route path="ss/ingresos"     element={<EstadoIngresos entity="SS" />} />
+```
+
+La sidebar se agrupa por ámbito (Estado · Seguridad Social · CCAA), usando `NavLink` de React Router. No hay toggle de entidad; la navegación es la fuente de verdad.
+
+`TopBar.tsx` es una barra `sticky top-0` con solo `YearSelector` + `ViewModeToggle` condicional. Sin `EntityToggle`.
 
 El store `filters.ts` expone `pageFilters: { showViewMode: boolean }` y `setPageFilters()`. Las páginas que necesitan el toggle Plan/Ejecución lo activan con:
 
@@ -385,8 +400,10 @@ useEffect(() => {
 }, [setPageFilters])
 ```
 
-Páginas con `showViewMode: true`: Ingresos (Estado), Gastos (Estado).
+Páginas con `showViewMode: true`: Estado/Ingresos, Estado/Gastos, SS/Ingresos, SS/Gastos.
 Páginas sin toggle: Inicio, Impuestos AEAT, IVA, Gasto por función, Pensiones, Transferencias, CCAA.
+
+**Redirects desde rutas antiguas:** `/ingresos` → `/estado/ingresos`, `/gastos` → `/estado/gastos`, `/comparativa` → `/estado/gastos`, `/transferencias` → `/ccaa/transferencias`.
 
 ### Unidades monetarias
 
@@ -470,7 +487,7 @@ export interface Insight {
 | Gastos | Peso transferencias corrientes (cap 4) · Variación YoY · Gasto en personal |
 | Impuestos (AEAT) | Variación recaudación YoY · Ratio devoluciones IVA · Máximo histórico |
 | IVA por tipo | Tipo efectivo medio · % base a tipo general/reducido · Cuota total · Tipo superreducido |
-| Comparativa | Tasa de ejecución global · Crédito no ejecutado · Capítulo menos ejecutado |
+| Estado/Gastos (modo comparativa) | Tasa de ejecución global · Crédito no ejecutado · Capítulo menos ejecutado |
 | Transferencias | Mayor receptora · Total nacional · % corrientes vs capital |
 | CCAA Overview | CCAA con mayor gasto · Mayor déficit · Tasa de ejecución media |
 | CCAA Detalle | — (KPI cards integrados en la cabecera; sin InsightsPanel) |

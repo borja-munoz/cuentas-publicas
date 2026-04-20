@@ -4,75 +4,75 @@ import { interpolateBlues } from 'd3-scale-chromatic'
 import PageHeader from '../../components/layout/PageHeader'
 import ContextBox from '../../components/ui/ContextBox'
 import InsightsPanel from '../../components/ui/InsightsPanel'
+import BarChart from '../../components/charts/BarChart'
 import LineChart from '../../components/charts/LineChart'
 import ChoroplethMap, { ColorLegend } from '../../components/charts/ChoroplethMap'
 import { ChartSkeleton } from '../../components/ui/LoadingSkeleton'
+import { useFilters } from '../../store/filters'
 import { formatEur } from '../../utils/format'
 import type { Insight } from '../../utils/insights'
 import {
-  getTransferenciasPorCcaa,
+  getCcaaIngresosResumen,
+  getCcaaIngresosPorCapituloNacional,
   getTransferenciasSerie,
   getCcaaYears,
-  type TransferenciasCcaa,
+  type CcaaIngresosResumen,
+  type CcaaCapituloNacional,
   type TransferenciasSerie,
 } from '../../db/queries/ccaa'
 
-// Toggle simple plan / ejecucion (sin modo comparativa)
-function FuenteToggle({
-  fuente,
-  onChange,
-}: {
-  fuente: 'plan' | 'ejecucion'
-  onChange: (f: 'plan' | 'ejecucion') => void
-}) {
-  return (
-    <div className="flex rounded-lg border border-gray-300 bg-white text-sm font-medium overflow-hidden shadow-sm">
-      {(['plan', 'ejecucion'] as const).map((f) => (
-        <button
-          key={f}
-          onClick={() => onChange(f)}
-          className={`px-3 py-1.5 capitalize transition-colors ${
-            fuente === f ? 'bg-[var(--color-accent)] text-white' : 'text-[var(--color-ink-muted)] hover:bg-gray-50'
-          }`}
-        >
-          {f === 'plan' ? 'Plan' : 'Ejecución'}
-        </button>
-      ))}
-    </div>
-  )
+const CAP_LABELS: Record<number, string> = {
+  1: 'Impuestos directos cedidos',
+  2: 'Impuestos indirectos cedidos',
+  3: 'Tasas y otros',
+  4: 'Transferencias corrientes',
+  5: 'Ingresos patrimoniales',
+  6: 'Enajenación inversiones',
+  7: 'Transferencias de capital',
 }
 
-export default function Transferencias() {
-  const [fuente, setFuente] = useState<'plan' | 'ejecucion'>('ejecucion')
-  const [availableYears, setAvailableYears] = useState<number[]>([])
-  const [selectedYear, setSelectedYear] = useState<number | null>(null)
+export default function IngresosCcaa() {
+  const { selectedYear: globalYear, viewMode, setPageFilters } = useFilters()
+  const fuente = viewMode === 'ejecucion' ? 'ejecucion' : 'plan'
 
-  // Cargar años disponibles en las tablas CCAA (solo hasta 2023)
+  const [availableYears, setAvailableYears] = useState<number[]>([])
+
   useEffect(() => {
-    getCcaaYears().then((ys) => {
-      setAvailableYears(ys)
-      setSelectedYear(ys.length > 0 ? Math.max(...ys) : null)
-    }).catch(console.error)
+    setPageFilters({ showViewMode: true, showComparativa: false })
+    return () => setPageFilters({ showViewMode: false, showComparativa: false })
+  }, [setPageFilters])
+
+  useEffect(() => {
+    getCcaaYears().then(setAvailableYears).catch(console.error)
   }, [])
 
-  const [rows, setRows] = useState<TransferenciasCcaa[]>([])
+  const selectedYear = useMemo(() => {
+    if (availableYears.length === 0) return null
+    if (availableYears.includes(globalYear)) return globalYear
+    const below = availableYears.filter((y) => y <= globalYear)
+    return below.length > 0 ? Math.max(...below) : Math.min(...availableYears)
+  }, [availableYears, globalYear])
+
+  const [rows, setRows] = useState<CcaaIngresosResumen[]>([])
+  const [caps, setCaps] = useState<CcaaCapituloNacional[]>([])
   const [loading, setLoading] = useState(true)
 
   const [selectedCcaa, setSelectedCcaa] = useState<string | null>(null)
   const [serie, setSerie] = useState<TransferenciasSerie[]>([])
   const [loadingSerie, setLoadingSerie] = useState(false)
 
-  // Cargar totales por CCAA para el año/fuente seleccionados
   useEffect(() => {
     if (selectedYear == null) return
     setLoading(true)
-    getTransferenciasPorCcaa(selectedYear, fuente)
-      .then(setRows)
+    Promise.all([
+      getCcaaIngresosResumen(selectedYear, fuente),
+      getCcaaIngresosPorCapituloNacional(selectedYear, fuente),
+    ])
+      .then(([r, c]) => { setRows(r); setCaps(c) })
       .catch(console.error)
       .finally(() => setLoading(false))
   }, [selectedYear, fuente])
 
-  // Cargar serie histórica cuando se selecciona una CCAA
   useEffect(() => {
     if (!selectedCcaa) { setSerie([]); return }
     setLoadingSerie(true)
@@ -80,15 +80,13 @@ export default function Transferencias() {
       .then(setSerie)
       .catch(console.error)
       .finally(() => setLoadingSerie(false))
-  }, [selectedCcaa, fuente])  // serie histórica abarca todos los años disponibles
+  }, [selectedCcaa, fuente])
 
-  // Mapa ccaa_cod → total para el coroplético
   const mapData = useMemo<Record<string, number>>(
     () => Object.fromEntries(rows.map((r) => [r.ccaa_cod, r.total])),
     [rows],
   )
 
-  // Escala de color (dominio dinámico)
   const maxTotal = useMemo(() => Math.max(...rows.map((r) => r.total), 1), [rows])
   const colorScale = useMemo(
     () => scaleSequential(interpolateBlues).domain([0, maxTotal]),
@@ -96,83 +94,80 @@ export default function Transferencias() {
   )
 
   const totalNacional = rows.reduce((s, r) => s + r.total, 0)
-  const top1 = rows[0]
+  const totalImpuestos = rows.reduce((s, r) => s + r.impuestos, 0)
+  const totalTransferencias = rows.reduce((s, r) => s + r.transferencias, 0)
+  const totalPropios = rows.reduce((s, r) => s + r.propios, 0)
+
+  const top1 = [...rows].sort((a, b) => b.total - a.total)[0]
 
   const insights: Insight[] = loading || rows.length === 0 ? [] : [
     ...(top1 ? [{
-      label: 'Mayor receptora',
+      label: 'Mayor ingreso autonómico',
       value: top1.ccaa_nom,
       trendValue: formatEur(top1.total),
       trend: 'neutral' as const,
-      description: `${top1.ccaa_nom} recibió ${formatEur(top1.total)} en transferencias del Estado en ${selectedYear ?? ''}, el ${((top1.total / totalNacional) * 100).toFixed(1)}% del total nacional.`,
+      description: `${top1.ccaa_nom} es la comunidad con mayores ingresos presupuestarios en ${selectedYear ?? ''} (${formatEur(top1.total)}), el ${((top1.total / totalNacional) * 100).toFixed(1)}% del total autonómico.`,
     }] : []),
     {
-      label: 'Total nacional',
+      label: 'Total ingresos autonómicos',
       value: formatEur(totalNacional),
-      trendValue: `${rows.length} CCAA`,
+      trendValue: `${rows.length} CCAA · ${selectedYear ?? ''}`,
       trend: 'neutral' as const,
-      description: `Suma de transferencias corrientes (cap. 4) y de capital (cap. 7) del Estado a todas las Comunidades Autónomas en ${selectedYear ?? ''} según ${fuente === 'plan' ? 'el presupuesto aprobado' : 'la ejecución liquidada'}.`,
+      description: `Suma de ingresos no financieros de todas las CCAA según ${fuente === 'plan' ? 'el presupuesto aprobado' : 'la liquidación'}.`,
     },
-    ...(top1 && rows.length > 1 ? [{
-      label: 'Corrientes vs capital',
-      value: `${((rows.reduce((s, r) => s + r.corriente, 0) / totalNacional) * 100).toFixed(0)}% corrientes`,
-      trendValue: `${((rows.reduce((s, r) => s + r.capital, 0) / totalNacional) * 100).toFixed(0)}% capital`,
+    {
+      label: 'Estructura de financiación',
+      value: totalNacional > 0
+        ? `${((totalTransferencias / totalNacional) * 100).toFixed(0)}% transferencias`
+        : '—',
+      trendValue: totalNacional > 0
+        ? `${((totalImpuestos / totalNacional) * 100).toFixed(0)}% tributos cedidos`
+        : undefined,
       trend: 'neutral' as const,
-      description: 'Las transferencias corrientes (financiación ordinaria de servicios públicos) suelen representar la mayor parte. Las de capital financian inversiones y proyectos estructurales.',
-    }] : []),
+      description: `Las transferencias del Estado (sistema de financiación) y los tributos cedidos (IRPF, IVA, especiales) son las dos principales fuentes de ingresos autonómicos.`,
+    },
   ]
+
+  const barCats = caps.map((c) => CAP_LABELS[c.capitulo] ?? `Cap. ${c.capitulo}`)
+  const barData = caps.map((c) => c.importe)
 
   const selectedRow = rows.find((r) => r.ccaa_cod === selectedCcaa)
 
   return (
     <div className="space-y-8">
       <PageHeader
-        title="Transferencias a CCAA"
-        subtitle={`Estado · ${fuente === 'plan' ? 'Plan' : 'Ejecución'}${selectedYear ? ` ${selectedYear}` : ''}`}
-        actions={
-          <div className="flex items-center gap-3">
-            <select
-              value={selectedYear ?? ''}
-              onChange={(e) => setSelectedYear(Number(e.target.value))}
-              disabled={availableYears.length === 0}
-              className="rounded border border-[var(--color-rule)] bg-white px-2 py-1.5 text-sm text-[var(--color-ink)] focus:outline-none focus:border-[var(--color-accent)]"
-            >
-              {[...availableYears].sort((a, b) => b - a).map((y) => (
-                <option key={y} value={y}>{y}</option>
-              ))}
-            </select>
-            <FuenteToggle fuente={fuente} onChange={setFuente} />
-          </div>
-        }
+        title="Ingresos CCAA"
+        subtitle={`Comunidades Autónomas · ${fuente === 'plan' ? 'Plan' : 'Ejecución'} · ${selectedYear ?? '—'}${selectedYear !== globalYear && selectedYear != null ? ' (último disponible)' : ''}`}
       />
 
-      <ContextBox title="Transferencias del Estado a las Comunidades Autónomas">
+      <ContextBox title="Ingresos de las Comunidades Autónomas">
         <p>
-          Las transferencias representan la principal vía de financiación autonómica desde el
-          Estado central. Se articulan principalmente a través del{' '}
-          <strong>Sistema de Financiación Autonómica</strong> (capítulo 4, corrientes) y los{' '}
-          <strong>fondos de inversión y compensación</strong> (capítulo 7, capital).
+          Los ingresos autonómicos proceden de tres fuentes principales:{' '}
+          <strong>tributos cedidos</strong> (capítulos 1 y 2: IRPF cedido, IVA cedido, impuestos
+          especiales), <strong>transferencias del Estado</strong> (capítulos 4 y 7: sistema de
+          financiación autonómica y fondos de inversión) e{' '}
+          <strong>ingresos propios</strong> (capítulos 3 y 5: tasas, precios públicos y
+          rendimientos del patrimonio).
         </p>
         <p>
-          Los datos aquí mostrados corresponden a los <strong>ingresos por transferencias</strong>{' '}
-          de cada CCAA (capítulos 4 y 7 de su presupuesto de ingresos), que incluyen tanto las
-          transferencias del Estado como otras procedentes del sistema de financiación. Fuente:
-          Ministerio de Hacienda (SGCIEF).
+          Los datos proceden de la <strong>liquidación presupuestaria</strong> publicada por el
+          Ministerio de Hacienda (SGCIEF), que agrega los presupuestos de ingresos de todas las
+          entidades dependientes de cada comunidad. Los capítulos 8 y 9 (operaciones financieras)
+          quedan excluidos.
         </p>
       </ContextBox>
 
       <InsightsPanel insights={insights} isLoading={loading} />
 
-      {/* Mapa + tabla */}
+      {/* Mapa + tabla resumen */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
-        {/* Mapa (3/5) */}
         <section className="lg:col-span-3">
           <div className="border border-[var(--color-rule)] bg-white px-4 pt-4 pb-3">
             <h2 className="text-sm font-semibold text-[var(--color-ink)] mb-1">
-              Mapa de transferencias · {selectedYear ?? '—'}
+              Total ingresos por CCAA · {selectedYear ?? '—'}
             </h2>
             <p className="text-xs text-[var(--color-ink-muted)] mb-3">
-              Haz clic en una comunidad para ver su evolución histórica.
+              M€. Clic en una comunidad para ver la evolución de sus transferencias.
             </p>
             {loading ? (
               <ChartSkeleton height={380} />
@@ -190,7 +185,7 @@ export default function Transferencias() {
                   colorScale={colorScale}
                   domain={[0, maxTotal]}
                   formatValue={formatEur}
-                  label="Total transferencias (M€)"
+                  label="Total ingresos (M€)"
                 />
               </>
             )}
@@ -200,55 +195,53 @@ export default function Transferencias() {
           </p>
         </section>
 
-        {/* Tabla (2/5) */}
         <section className="lg:col-span-2">
           <h2 className="text-sm font-semibold text-[var(--color-ink)] mb-3">
-            Ranking por CCAA · {selectedYear ?? '—'}
+            Estructura de ingresos por CCAA · {selectedYear ?? '—'}
           </h2>
           <div className="overflow-x-auto border border-[var(--color-rule)] bg-white">
-            <table className="data-table w-full">
+            <table className="data-table w-full text-xs">
               <thead>
                 <tr>
                   <th>CCAA</th>
-                  <th>Total (M€)</th>
-                  <th>% s/total</th>
+                  <th>Tributos</th>
+                  <th>Transf.</th>
+                  <th>Total</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={3} className="py-8 text-center text-[var(--color-ink-muted)]">
+                    <td colSpan={4} className="py-8 text-center text-[var(--color-ink-muted)]">
                       Cargando…
                     </td>
                   </tr>
                 ) : (
-                  rows.map((r) => (
-                    <tr
-                      key={r.ccaa_cod}
-                      className={`cursor-pointer transition-colors hover:bg-[var(--color-accent)]/5 ${
-                        selectedCcaa === r.ccaa_cod ? 'bg-[var(--color-accent)]/10' : ''
-                      }`}
-                      onClick={() =>
-                        setSelectedCcaa((prev) => (prev === r.ccaa_cod ? null : r.ccaa_cod))
-                      }
-                    >
-                      <td className="font-medium">{r.ccaa_nom}</td>
-                      <td>{formatEur(r.total)}</td>
-                      <td>
-                        {totalNacional > 0
-                          ? `${((r.total / totalNacional) * 100).toLocaleString('es-ES', { maximumFractionDigits: 1 })}%`
-                          : '—'}
-                      </td>
-                    </tr>
-                  ))
+                  [...rows]
+                    .sort((a, b) => b.total - a.total)
+                    .map((r) => (
+                      <tr
+                        key={r.ccaa_cod}
+                        className={`cursor-pointer transition-colors hover:bg-[var(--color-accent)]/5 ${
+                          selectedCcaa === r.ccaa_cod ? 'bg-[var(--color-accent)]/10' : ''
+                        }`}
+                        onClick={() => setSelectedCcaa((prev) => (prev === r.ccaa_cod ? null : r.ccaa_cod))}
+                      >
+                        <td className="font-medium">{r.ccaa_nom}</td>
+                        <td>{formatEur(r.impuestos)}</td>
+                        <td>{formatEur(r.transferencias)}</td>
+                        <td>{formatEur(r.total)}</td>
+                      </tr>
+                    ))
                 )}
               </tbody>
               {!loading && rows.length > 0 && (
                 <tfoot>
                   <tr className="total-row">
                     <td>Total</td>
+                    <td>{formatEur(totalImpuestos)}</td>
+                    <td>{formatEur(totalTransferencias)}</td>
                     <td>{formatEur(totalNacional)}</td>
-                    <td>100,0%</td>
                   </tr>
                 </tfoot>
               )}
@@ -257,13 +250,86 @@ export default function Transferencias() {
         </section>
       </div>
 
-      {/* Panel de detalle: evolución histórica de la CCAA seleccionada */}
+      {/* Desglose nacional por capítulo */}
+      {caps.length > 0 && (
+        <div className="border border-[var(--color-rule)] bg-white px-4 pt-4 pb-3">
+          <h2 className="text-sm font-semibold text-[var(--color-ink)] mb-1">
+            Desglose nacional por capítulo · {selectedYear ?? '—'}
+          </h2>
+          <p className="text-xs text-[var(--color-ink-muted)] mb-3">
+            Suma agregada de todas las CCAA en M€.
+          </p>
+          {loading ? (
+            <ChartSkeleton height={240} />
+          ) : (
+            <BarChart
+              categories={barCats}
+              series={[{ name: 'Ingresos (M€)', data: barData, color: '#B82A2A' }]}
+              horizontal
+              height={240}
+            />
+          )}
+        </div>
+      )}
+
+      {/* Tabla detallada */}
+      {!loading && rows.length > 0 && (
+        <section>
+          <h2 className="text-sm font-semibold text-[var(--color-ink)] mb-3">
+            Detalle por CCAA · {selectedYear ?? '—'}
+          </h2>
+          <div className="overflow-x-auto border border-[var(--color-rule)] bg-white">
+            <table className="data-table w-full">
+              <thead>
+                <tr>
+                  <th>CCAA</th>
+                  <th>Tributos cedidos (M€)</th>
+                  <th>Transferencias (M€)</th>
+                  <th>Ingresos propios (M€)</th>
+                  <th>Total (M€)</th>
+                  <th>% s/total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...rows]
+                  .sort((a, b) => b.total - a.total)
+                  .map((r) => (
+                    <tr key={r.ccaa_cod}>
+                      <td className="font-medium">{r.ccaa_nom}</td>
+                      <td>{formatEur(r.impuestos)}</td>
+                      <td>{formatEur(r.transferencias)}</td>
+                      <td>{formatEur(r.propios)}</td>
+                      <td>{formatEur(r.total)}</td>
+                      <td>
+                        {totalNacional > 0
+                          ? `${((r.total / totalNacional) * 100).toLocaleString('es-ES', { maximumFractionDigits: 1 })}%`
+                          : '—'}
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+              <tfoot>
+                <tr className="total-row">
+                  <td>Total</td>
+                  <td>{formatEur(totalImpuestos)}</td>
+                  <td>{formatEur(totalTransferencias)}</td>
+                  <td>{formatEur(totalPropios)}</td>
+                  <td>{formatEur(totalNacional)}</td>
+                  <td>100,0%</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {/* Evolución histórica de transferencias para la CCAA seleccionada */}
       {selectedCcaa && (
         <section>
           <div className="border border-[var(--color-rule)] bg-white px-5 pt-4 pb-3">
             <div className="flex items-center justify-between mb-1">
               <h2 className="text-sm font-semibold text-[var(--color-ink)]">
-                Evolución histórica · {selectedRow?.ccaa_nom ?? selectedCcaa}
+                Evolución de transferencias · {selectedRow?.ccaa_nom ?? selectedCcaa}
               </h2>
               <button
                 onClick={() => setSelectedCcaa(null)}
@@ -273,7 +339,7 @@ export default function Transferencias() {
               </button>
             </div>
             <p className="text-xs text-[var(--color-ink-muted)] mb-4">
-              Transferencias corrientes y de capital en M€ · {fuente === 'plan' ? 'plan' : 'ejecución'}.
+              Transferencias corrientes y de capital del Estado a la CCAA (caps. 4 y 7 de ingresos) · M€.
             </p>
             {loadingSerie ? (
               <ChartSkeleton height={240} />
@@ -281,23 +347,9 @@ export default function Transferencias() {
               <LineChart
                 categories={serie.map((s) => String(s.year))}
                 series={[
-                  {
-                    name: 'Total',
-                    data: serie.map((s) => s.total),
-                    color: '#B82A2A',
-                  },
-                  {
-                    name: 'Corrientes',
-                    data: serie.map((s) => s.corriente),
-                    color: '#C89B3C',
-                    dashed: true,
-                  },
-                  {
-                    name: 'Capital',
-                    data: serie.map((s) => s.capital),
-                    color: '#5C6F7E',
-                    dashed: true,
-                  },
+                  { name: 'Total transferencias', data: serie.map((s) => s.total), color: '#B82A2A' },
+                  { name: 'Corrientes', data: serie.map((s) => s.corriente), color: '#C89B3C', dashed: true },
+                  { name: 'Capital', data: serie.map((s) => s.capital), color: '#5C6F7E', dashed: true },
                 ]}
                 height={240}
                 smooth
@@ -310,58 +362,9 @@ export default function Transferencias() {
         </section>
       )}
 
-      {/* Tabla de detalle corriente/capital */}
-      {!loading && rows.length > 0 && (
-        <section>
-          <h2 className="text-sm font-semibold text-[var(--color-ink)] mb-3">
-            Desglose corriente / capital · {selectedYear ?? '—'}
-          </h2>
-          <div className="overflow-x-auto border border-[var(--color-rule)] bg-white">
-            <table className="data-table w-full">
-              <thead>
-                <tr>
-                  <th>CCAA</th>
-                  <th>Corrientes (cap. 4)</th>
-                  <th>Capital (cap. 7)</th>
-                  <th>Total</th>
-                  <th>% capital</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r) => (
-                  <tr key={r.ccaa_cod}>
-                    <td className="font-medium">{r.ccaa_nom}</td>
-                    <td>{formatEur(r.corriente)}</td>
-                    <td>{formatEur(r.capital)}</td>
-                    <td>{formatEur(r.total)}</td>
-                    <td>
-                      {r.total > 0
-                        ? `${((r.capital / r.total) * 100).toLocaleString('es-ES', { maximumFractionDigits: 1 })}%`
-                        : '—'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr className="total-row">
-                  <td>Total</td>
-                  <td>{formatEur(rows.reduce((s, r) => s + r.corriente, 0))}</td>
-                  <td>{formatEur(rows.reduce((s, r) => s + r.capital, 0))}</td>
-                  <td>{formatEur(totalNacional)}</td>
-                  <td>
-                    {totalNacional > 0
-                      ? `${((rows.reduce((s, r) => s + r.capital, 0) / totalNacional) * 100).toLocaleString('es-ES', { maximumFractionDigits: 1 })}%`
-                      : '—'}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-          <p className="mt-2 text-[0.7rem] text-[var(--color-ink-faint)]">
-            Fuente: Ministerio de Hacienda · SGCIEF. Datos en M€.
-          </p>
-        </section>
-      )}
+      <p className="text-[0.7rem] text-[var(--color-ink-faint)]">
+        Fuente: Ministerio de Hacienda · SGCIEF. Liquidación presupuestaria de las CCAA. Datos en M€. Excluye caps. 8 y 9 (operaciones financieras).
+      </p>
     </div>
   )
 }

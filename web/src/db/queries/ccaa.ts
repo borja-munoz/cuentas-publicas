@@ -112,6 +112,56 @@ export async function getCcaaIngresosPorCapitulo(
   `)
 }
 
+export interface CcaaIngresosResumen {
+  ccaa_cod: string
+  ccaa_nom: string
+  total: number
+  impuestos: number       // caps 1+2 (tributos cedidos)
+  transferencias: number  // caps 4+7 (financiación autonómica + fondos)
+  propios: number         // caps 3+5 (tasas, patrimoniales)
+}
+
+export async function getCcaaIngresosResumen(
+  year: number,
+  fuente: 'plan' | 'ejecucion',
+): Promise<CcaaIngresosResumen[]> {
+  return query<CcaaIngresosResumen>(`
+    SELECT i.ccaa_cod, r.ccaa_nom,
+           CAST(SUM(i.importe) / 1000.0 AS DOUBLE) AS total,
+           CAST(SUM(CASE WHEN i.capitulo IN (1, 2) THEN i.importe ELSE 0 END) / 1000.0 AS DOUBLE) AS impuestos,
+           CAST(SUM(CASE WHEN i.capitulo IN (4, 7) THEN i.importe ELSE 0 END) / 1000.0 AS DOUBLE) AS transferencias,
+           CAST(SUM(CASE WHEN i.capitulo IN (3, 5) THEN i.importe ELSE 0 END) / 1000.0 AS DOUBLE) AS propios
+    FROM cp.ccaa_ingresos i
+    JOIN cp.ccaa_ref r USING (ccaa_cod)
+    WHERE i.year = ${year} AND i.fuente = '${fuente}'
+      AND i.capitulo NOT IN (8, 9)
+    GROUP BY i.ccaa_cod, r.ccaa_nom
+    ORDER BY total DESC
+  `)
+}
+
+export interface CcaaCapituloNacional {
+  capitulo: number
+  descripcion: string
+  importe: number
+}
+
+export async function getCcaaIngresosPorCapituloNacional(
+  year: number,
+  fuente: 'plan' | 'ejecucion',
+): Promise<CcaaCapituloNacional[]> {
+  return query<CcaaCapituloNacional>(`
+    SELECT capitulo,
+           MAX(descripcion) AS descripcion,
+           CAST(SUM(importe) / 1000.0 AS DOUBLE) AS importe
+    FROM cp.ccaa_ingresos
+    WHERE year = ${year} AND fuente = '${fuente}'
+      AND capitulo NOT IN (8, 9)
+    GROUP BY capitulo
+    ORDER BY capitulo
+  `)
+}
+
 // Años disponibles en las tablas CCAA
 export async function getCcaaYears(): Promise<number[]> {
   const rows = await query<{ year: number }>(

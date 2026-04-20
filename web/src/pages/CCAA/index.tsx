@@ -8,6 +8,7 @@ import InsightsPanel from '../../components/ui/InsightsPanel'
 import BarChart from '../../components/charts/BarChart'
 import ChoroplethMap, { ColorLegend } from '../../components/charts/ChoroplethMap'
 import { ChartSkeleton } from '../../components/ui/LoadingSkeleton'
+import { useFilters } from '../../store/filters'
 import { formatEur, formatPct } from '../../utils/format'
 import type { Insight } from '../../utils/insights'
 import {
@@ -18,34 +19,11 @@ import {
   type CcaaCapitulo,
 } from '../../db/queries/ccaa'
 
-type MapVariable = 'gastos_ejec' | 'gastos_plan' | 'deficit'
+type MapVariable = 'gastos_ejec' | 'gastos_plan'
 
 const MAP_VAR_LABELS: Record<MapVariable, string> = {
   gastos_ejec: 'Gasto ejecutado (M€)',
   gastos_plan: 'Gasto planificado (M€)',
-  deficit: 'Déficit / superávit (M€)',
-}
-
-function MapVarSelector({
-  value,
-  onChange,
-}: {
-  value: MapVariable
-  onChange: (v: MapVariable) => void
-}) {
-  return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value as MapVariable)}
-      className="rounded border border-[var(--color-rule)] bg-white px-2 py-1.5 text-sm text-[var(--color-ink)] focus:outline-none focus:border-[var(--color-accent)]"
-    >
-      {(Object.keys(MAP_VAR_LABELS) as MapVariable[]).map((k) => (
-        <option key={k} value={k}>
-          {MAP_VAR_LABELS[k]}
-        </option>
-      ))}
-    </select>
-  )
 }
 
 const CAPS_OPERACIONALES = [1, 2, 3, 4, 6, 7]
@@ -59,16 +37,26 @@ const CAP_LABELS: Record<number, string> = {
 }
 
 export default function CCAA() {
-  const [mapVar, setMapVar] = useState<MapVariable>('gastos_ejec')
+  const { selectedYear: globalYear, viewMode, setPageFilters } = useFilters()
   const [availableYears, setAvailableYears] = useState<number[]>([])
-  const [selectedYear, setSelectedYear] = useState<number | null>(null)
 
   useEffect(() => {
-    getCcaaYears().then((ys) => {
-      setAvailableYears(ys)
-      setSelectedYear(ys.length > 0 ? Math.max(...ys) : null)
-    }).catch(console.error)
+    setPageFilters({ showViewMode: true, showComparativa: false })
+    return () => setPageFilters({ showViewMode: false, showComparativa: false })
+  }, [setPageFilters])
+
+  useEffect(() => {
+    getCcaaYears().then(setAvailableYears).catch(console.error)
   }, [])
+
+  const selectedYear = useMemo(() => {
+    if (availableYears.length === 0) return null
+    if (availableYears.includes(globalYear)) return globalYear
+    const below = availableYears.filter((y) => y <= globalYear)
+    return below.length > 0 ? Math.max(...below) : Math.min(...availableYears)
+  }, [availableYears, globalYear])
+
+  const mapVar: MapVariable = viewMode === 'ejecucion' ? 'gastos_ejec' : 'gastos_plan'
 
   const [rows, setRows] = useState<CcaaResumen[]>([])
   const [loading, setLoading] = useState(true)
@@ -96,18 +84,10 @@ export default function CCAA() {
   }, [selectedCcaa, selectedYear])
 
   // Valor del mapa según variable seleccionada
-  const mapData = useMemo<Record<string, number>>(() => {
-    const entries = rows.map((r) => {
-      let val: number
-      if (mapVar === 'deficit') {
-        val = (r.ingresos_ejec || r.ingresos_plan) - (r.gastos_ejec || r.gastos_plan)
-      } else {
-        val = r[mapVar] ?? 0
-      }
-      return [r.ccaa_cod, Math.max(val, 0)] // para negativo en déficit usamos 0 (sin color)
-    })
-    return Object.fromEntries(entries)
-  }, [rows, mapVar])
+  const mapData = useMemo<Record<string, number>>(
+    () => Object.fromEntries(rows.map((r) => [r.ccaa_cod, r[mapVar] ?? 0])),
+    [rows, mapVar],
+  )
 
   const maxVal = useMemo(() => Math.max(...Object.values(mapData), 1), [mapData])
   const colorScale = useMemo(
@@ -166,22 +146,7 @@ export default function CCAA() {
     <div className="space-y-8">
       <PageHeader
         title="Comunidades Autónomas"
-        subtitle={`Presupuestos autonómicos consolidados · ${selectedYear ?? ''}`}
-        actions={
-          <div className="flex items-center gap-3">
-            <select
-              value={selectedYear ?? ''}
-              onChange={(e) => setSelectedYear(Number(e.target.value))}
-              disabled={availableYears.length === 0}
-              className="rounded border border-[var(--color-rule)] bg-white px-2 py-1.5 text-sm text-[var(--color-ink)] focus:outline-none focus:border-[var(--color-accent)]"
-            >
-              {[...availableYears].sort((a, b) => b - a).map((y) => (
-                <option key={y} value={y}>{y}</option>
-              ))}
-            </select>
-            <MapVarSelector value={mapVar} onChange={setMapVar} />
-          </div>
-        }
+        subtitle={`Presupuestos autonómicos consolidados · ${selectedYear ?? '—'}${selectedYear !== globalYear && selectedYear != null ? ' (último disponible)' : ''}`}
       />
 
       <ContextBox title="Presupuestos de las Comunidades Autónomas">

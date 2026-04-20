@@ -3,15 +3,16 @@ import { useFilters, type ViewMode } from '../../store/filters'
 const OPTIONS: { value: ViewMode; label: string }[] = [
   { value: 'plan', label: 'Plan' },
   { value: 'ejecucion', label: 'Ejecución' },
-  { value: 'comparativa', label: 'Comparativa' },
+  { value: 'comparativa', label: 'Plan vs Ejec.' },
 ]
 
 export default function ViewModeToggle() {
-  const { viewMode, setViewMode } = useFilters()
+  const { viewMode, setViewMode, pageFilters } = useFilters()
+  const options = pageFilters.showComparativa ? OPTIONS : OPTIONS.slice(0, 2)
 
   return (
     <div className="flex rounded-lg border border-gray-300 bg-white text-sm font-medium overflow-hidden shadow-sm">
-      {OPTIONS.map(({ value, label }) => (
+      {options.map(({ value, label }) => (
         <button
           key={value}
           onClick={() => setViewMode(value)}

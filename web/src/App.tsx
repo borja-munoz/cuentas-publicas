@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import ErrorBoundary from './components/ui/ErrorBoundary'
 import AppShell from './components/layout/AppShell'
 import { query } from './db/client'
@@ -12,7 +12,6 @@ import IvaTipos from './pages/Ingresos/IvaTipos'
 import Gastos from './pages/Gastos'
 import GastosFuncion from './pages/Gastos/Funcion'
 import Pensiones from './pages/Gastos/Pensiones'
-import Comparativa from './pages/Comparativa'
 import Transferencias from './pages/Transferencias'
 import CCAA from './pages/CCAA'
 import CcaaDetalle from './pages/CCAA/Detalle'
@@ -65,16 +64,33 @@ export default function App() {
         <Routes>
           <Route element={<AppShell />}>
             <Route index element={<Inicio />} />
-            <Route path="ingresos" element={<Ingresos />} />
-            <Route path="ingresos/impuestos" element={<Impuestos />} />
-            <Route path="ingresos/impuestos/iva" element={<IvaTipos />} />
-            <Route path="gastos" element={<Gastos />} />
-            <Route path="gastos/funcion" element={<GastosFuncion />} />
-            <Route path="gastos/pensiones" element={<Pensiones />} />
-            <Route path="comparativa" element={<Comparativa />} />
-            <Route path="transferencias" element={<Transferencias />} />
+
+            {/* Estado */}
+            <Route path="estado/ingresos" element={<Ingresos entity="Estado" />} />
+            <Route path="estado/ingresos/impuestos" element={<Impuestos />} />
+            <Route path="estado/ingresos/impuestos/iva" element={<IvaTipos />} />
+            <Route path="estado/gastos" element={<Gastos entity="Estado" />} />
+            <Route path="estado/gastos/funcion" element={<GastosFuncion />} />
+
+            {/* Seguridad Social */}
+            <Route path="ss/ingresos" element={<Ingresos entity="SS" />} />
+            <Route path="ss/gastos" element={<Gastos entity="SS" />} />
+            <Route path="ss/gastos/pensiones" element={<Pensiones />} />
+
+            {/* CCAA */}
             <Route path="ccaa" element={<CCAA />} />
+            <Route path="ccaa/transferencias" element={<Transferencias />} />
             <Route path="ccaa/:cod" element={<CcaaDetalle />} />
+
+            {/* Redirects desde rutas antiguas */}
+            <Route path="ingresos" element={<Navigate to="/estado/ingresos" replace />} />
+            <Route path="ingresos/impuestos" element={<Navigate to="/estado/ingresos/impuestos" replace />} />
+            <Route path="ingresos/impuestos/iva" element={<Navigate to="/estado/ingresos/impuestos/iva" replace />} />
+            <Route path="gastos" element={<Navigate to="/estado/gastos" replace />} />
+            <Route path="gastos/funcion" element={<Navigate to="/estado/gastos/funcion" replace />} />
+            <Route path="gastos/pensiones" element={<Navigate to="/ss/gastos/pensiones" replace />} />
+            <Route path="comparativa" element={<Navigate to="/estado/gastos" replace />} />
+            <Route path="transferencias" element={<Navigate to="/ccaa/transferencias" replace />} />
           </Route>
         </Routes>
       </BrowserRouter>

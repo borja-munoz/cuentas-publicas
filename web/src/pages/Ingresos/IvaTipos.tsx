@@ -6,6 +6,7 @@ import InsightsPanel from '../../components/ui/InsightsPanel'
 import BarChart from '../../components/charts/BarChart'
 import LineChart from '../../components/charts/LineChart'
 import { ChartSkeleton } from '../../components/ui/LoadingSkeleton'
+import { useFilters } from '../../store/filters'
 import { formatEur } from '../../utils/format'
 import type { Insight } from '../../utils/insights'
 import {
@@ -20,8 +21,8 @@ import {
 const TIPOS_ORDEN = ['general', 'reducido', 'superreducido'] as const
 
 export default function IvaTipos() {
+  const { selectedYear } = useFilters()
   const [availableYears, setAvailableYears] = useState<number[]>([])
-  const [selectedYear, setSelectedYear] = useState<number | null>(null)
 
   const [rows, setRows] = useState<IvaTipo[]>([])
   const [historico, setHistorico] = useState<IvaTipo[]>([])
@@ -29,22 +30,25 @@ export default function IvaTipos() {
   const [loadingHistorico, setLoadingHistorico] = useState(true)
 
   useEffect(() => {
-    getIvaYears()
-      .then((ys) => {
-        setAvailableYears(ys)
-        setSelectedYear(ys.length > 0 ? Math.max(...ys) : null)
-      })
-      .catch(console.error)
+    getIvaYears().then(setAvailableYears).catch(console.error)
   }, [])
 
+  // Clamp global year to available IVA years
+  const effectiveYear = useMemo(() => {
+    if (availableYears.length === 0) return null
+    if (availableYears.includes(selectedYear)) return selectedYear
+    const below = availableYears.filter((y) => y <= selectedYear)
+    return below.length > 0 ? Math.max(...below) : Math.min(...availableYears)
+  }, [availableYears, selectedYear])
+
   useEffect(() => {
-    if (selectedYear == null) return
+    if (effectiveYear == null) return
     setLoading(true)
-    getIvaAnio(selectedYear)
+    getIvaAnio(effectiveYear)
       .then(setRows)
       .catch(console.error)
       .finally(() => setLoading(false))
-  }, [selectedYear])
+  }, [effectiveYear])
 
   useEffect(() => {
     setLoadingHistorico(true)
@@ -59,7 +63,6 @@ export default function IvaTipos() {
     [historico],
   )
 
-  // Gráfico de barras: base imponible por tipo (año seleccionado)
   const sortedRows = useMemo(
     () => [...rows].sort((a, b) => TIPOS_ORDEN.indexOf(a.tipo as typeof TIPOS_ORDEN[number]) - TIPOS_ORDEN.indexOf(b.tipo as typeof TIPOS_ORDEN[number])),
     [rows],
@@ -67,9 +70,7 @@ export default function IvaTipos() {
   const barCats = sortedRows.map((r) => IVA_TIPO_LABELS[r.tipo] ?? r.tipo)
   const barBaseData = sortedRows.map((r) => r.base_imponible)
   const barCuotaData = sortedRows.map((r) => r.cuota_devengada)
-  const barColors = sortedRows.map((r) => IVA_TIPO_COLORS[r.tipo] ?? '#999')
 
-  // Series históricas: cuota devengada por tipo
   const lineSeriesCuota = useMemo(
     () =>
       TIPOS_ORDEN.map((tipo) => ({
@@ -82,7 +83,6 @@ export default function IvaTipos() {
     [historico, yearsInSeries],
   )
 
-  // Insights
   const totalCuota = rows.reduce((s, r) => s + r.cuota_devengada, 0)
   const totalBase = rows.reduce((s, r) => s + r.base_imponible, 0)
   const general = rows.find((r) => r.tipo === 'general')
@@ -95,7 +95,7 @@ export default function IvaTipos() {
       label: 'Tipo efectivo medio IVA',
       value: `${tipoEfectivo.toLocaleString('es-ES', { maximumFractionDigits: 1 })}%`,
       trend: 'neutral' as const,
-      description: `El tipo efectivo global del IVA en ${selectedYear} es del ${tipoEfectivo.toFixed(1)}%, resultado de aplicar el 21%, 10% y 4% a distintas bases imponibles. Es inferior al tipo general del 21% porque una parte significativa del consumo tributa a tipos reducidos.`,
+      description: `El tipo efectivo global del IVA en ${effectiveYear} es del ${tipoEfectivo.toFixed(1)}%, resultado de aplicar el 21%, 10% y 4% a distintas bases imponibles.`,
     }] : []),
     ...(general && reducido ? [{
       label: 'Base a tipo general vs reducido',
@@ -103,72 +103,57 @@ export default function IvaTipos() {
         ? `${((general.base_imponible / totalBase) * 100).toFixed(0)}% / ${((reducido.base_imponible / totalBase) * 100).toFixed(0)}%`
         : '—',
       trend: 'neutral' as const,
-      description: `En ${selectedYear}, el ${((general.base_imponible / totalBase) * 100).toFixed(1)}% de la base imponible tributa al 21% (tipo general) y el ${((reducido.base_imponible / totalBase) * 100).toFixed(1)}% al 10% (tipo reducido). El tipo superreducido (4%) aplica a bienes de primera necesidad como alimentos básicos, medicamentos y libros.`,
+      description: `En ${effectiveYear}, el ${((general.base_imponible / totalBase) * 100).toFixed(1)}% de la base imponible tributa al 21% y el ${((reducido.base_imponible / totalBase) * 100).toFixed(1)}% al 10%.`,
     }] : []),
     {
       label: 'Cuota devengada total IVA',
       value: formatEur(totalCuota),
-      trendValue: `${selectedYear ?? ''}`,
+      trendValue: `${effectiveYear ?? ''}`,
       trend: 'neutral' as const,
-      description: `Suma de la cuota devengada en los tres tipos impositivos del IVA en ${selectedYear}. El IVA es un impuesto sobre el consumo que recae sobre el valor añadido en cada fase de la cadena productiva. Fuente: AEAT Modelo 390.`,
+      description: `Suma de la cuota devengada en los tres tipos impositivos del IVA en ${effectiveYear}. Fuente: AEAT Modelo 390.`,
     },
     ...(superreducido ? [{
       label: 'Tipo superreducido (4%)',
       value: formatEur(superreducido.cuota_devengada),
       trendValue: `${totalCuota > 0 ? ((superreducido.cuota_devengada / totalCuota) * 100).toFixed(1) : '—'}% del total`,
       trend: 'neutral' as const,
-      description: `El tipo superreducido del 4% se aplica a bienes esenciales: pan, leche, huevos, frutas y verduras frescas, medicamentos, libros, periódicos y sillas de ruedas. Su finalidad es reducir la carga fiscal sobre los hogares de menor renta.`,
+      description: `El tipo superreducido del 4% se aplica a bienes esenciales: pan, leche, huevos, frutas y verduras, medicamentos, libros y periódicos.`,
     }] : []),
   ]
 
   return (
     <div className="space-y-8">
       <div className="flex items-center gap-2 text-xs text-[var(--color-ink-muted)]">
-        <Link to="/ingresos/impuestos" className="hover:text-[var(--color-accent)]">
+        <Link to="/estado/ingresos/impuestos" className="hover:text-[var(--color-accent)]">
           ← Impuestos AEAT
         </Link>
       </div>
 
       <PageHeader
         title="IVA por tipo impositivo"
-        subtitle={`AEAT Modelo 390 · ${selectedYear ?? ''}`}
-        actions={
-          <select
-            value={selectedYear ?? ''}
-            onChange={(e) => setSelectedYear(Number(e.target.value))}
-            disabled={availableYears.length === 0}
-            className="rounded border border-[var(--color-rule)] bg-white px-2 py-1.5 text-sm text-[var(--color-ink)] focus:outline-none"
-          >
-            {[...availableYears].sort((a, b) => b - a).map((y) => (
-              <option key={y} value={y}>{y}</option>
-            ))}
-          </select>
-        }
+        subtitle={`AEAT Modelo 390 · ${effectiveYear ?? '—'}${effectiveYear !== selectedYear && effectiveYear != null ? ' (último disponible)' : ''}`}
       />
 
       <ContextBox title="Los tres tipos del IVA">
         <p>
           El <strong>Impuesto sobre el Valor Añadido (IVA)</strong> en España opera con tres tipos
-          impositivos diferenciados según la naturaleza del bien o servicio:{' '}
-          <strong>general (21%)</strong>, aplicable a la mayoría de bienes y servicios;{' '}
-          <strong>reducido (10%)</strong>, para transporte, hostelería, vivienda nueva y algunos
-          alimentos; y <strong>superreducido (4%)</strong>, para bienes de primera necesidad como
-          alimentos básicos, medicamentos, libros y material escolar.
+          impositivos diferenciados: <strong>general (21%)</strong>, aplicable a la mayoría de
+          bienes y servicios; <strong>reducido (10%)</strong>, para transporte, hostelería,
+          vivienda nueva y algunos alimentos; y <strong>superreducido (4%)</strong>, para bienes
+          de primera necesidad como alimentos básicos, medicamentos, libros y material escolar.
         </p>
         <p>
           Los datos proceden del <strong>Modelo 390</strong> (declaración anual del IVA) publicado
-          por la AEAT. Incluyen la <em>base imponible</em> (valor sobre el que se aplica el tipo) y
-          la <em>cuota devengada</em> (impuesto generado antes de deducciones). Los importes son
-          agregados nacionales en millones de euros.
+          por la AEAT. Incluyen la <em>base imponible</em> y la <em>cuota devengada</em>.
+          Disponibles hasta 2022. Los importes son agregados nacionales en millones de euros.
         </p>
       </ContextBox>
 
       <InsightsPanel insights={insights} isLoading={loading} />
 
-      {/* Barras: base imponible y cuota devengada por tipo */}
       <div className="border border-[var(--color-rule)] bg-white px-4 pt-4 pb-3">
         <h2 className="text-sm font-semibold text-[var(--color-ink)] mb-1">
-          Base imponible y cuota devengada por tipo · {selectedYear ?? '—'}
+          Base imponible y cuota devengada por tipo · {effectiveYear ?? '—'}
         </h2>
         <p className="text-xs text-[var(--color-ink-muted)] mb-3">
           Millones de euros. Régimen general (Modelo 390).
@@ -180,20 +165,15 @@ export default function IvaTipos() {
             categories={barCats}
             series={[
               { name: 'Base imponible', data: barBaseData, color: '#94a3b8' },
-              {
-                name: 'Cuota devengada',
-                data: barCuotaData,
-                color: barColors[0] ?? '#B82A2A',
-              },
+              { name: 'Cuota devengada', data: barCuotaData, color: '#B82A2A' },
             ]}
             height={260}
           />
         ) : (
-          <p className="py-8 text-center text-sm text-[var(--color-ink-muted)]">Sin datos para {selectedYear}.</p>
+          <p className="py-8 text-center text-sm text-[var(--color-ink-muted)]">Sin datos para {effectiveYear}.</p>
         )}
       </div>
 
-      {/* Tabla detalle año */}
       {!loading && rows.length > 0 && (
         <div className="overflow-x-auto border border-[var(--color-rule)] bg-white">
           <table className="data-table w-full">
@@ -210,24 +190,13 @@ export default function IvaTipos() {
               {sortedRows.map((r) => (
                 <tr key={r.tipo}>
                   <td className="font-medium">
-                    <span
-                      className="mr-2 inline-block h-2 w-2 rounded-full"
-                      style={{ backgroundColor: IVA_TIPO_COLORS[r.tipo] ?? '#999' }}
-                    />
+                    <span className="mr-2 inline-block h-2 w-2 rounded-full" style={{ backgroundColor: IVA_TIPO_COLORS[r.tipo] ?? '#999' }} />
                     {IVA_TIPO_LABELS[r.tipo] ?? r.tipo}
                   </td>
                   <td>{formatEur(r.base_imponible)}</td>
                   <td>{formatEur(r.cuota_devengada)}</td>
-                  <td>
-                    {r.base_imponible > 0
-                      ? `${((r.cuota_devengada / r.base_imponible) * 100).toLocaleString('es-ES', { maximumFractionDigits: 1 })}%`
-                      : '—'}
-                  </td>
-                  <td>
-                    {totalCuota > 0
-                      ? `${((r.cuota_devengada / totalCuota) * 100).toLocaleString('es-ES', { maximumFractionDigits: 1 })}%`
-                      : '—'}
-                  </td>
+                  <td>{r.base_imponible > 0 ? `${((r.cuota_devengada / r.base_imponible) * 100).toLocaleString('es-ES', { maximumFractionDigits: 1 })}%` : '—'}</td>
+                  <td>{totalCuota > 0 ? `${((r.cuota_devengada / totalCuota) * 100).toLocaleString('es-ES', { maximumFractionDigits: 1 })}%` : '—'}</td>
                 </tr>
               ))}
             </tbody>
@@ -236,11 +205,7 @@ export default function IvaTipos() {
                 <td>Total</td>
                 <td>{formatEur(totalBase)}</td>
                 <td>{formatEur(totalCuota)}</td>
-                <td>
-                  {totalBase > 0
-                    ? `${((totalCuota / totalBase) * 100).toLocaleString('es-ES', { maximumFractionDigits: 1 })}%`
-                    : '—'}
-                </td>
+                <td>{totalBase > 0 ? `${((totalCuota / totalBase) * 100).toLocaleString('es-ES', { maximumFractionDigits: 1 })}%` : '—'}</td>
                 <td>100,0%</td>
               </tr>
             </tfoot>
@@ -248,7 +213,6 @@ export default function IvaTipos() {
         </div>
       )}
 
-      {/* Serie histórica: cuota devengada */}
       <div className="border border-[var(--color-rule)] bg-white px-4 pt-4 pb-3">
         <h2 className="text-sm font-semibold text-[var(--color-ink)] mb-1">
           Evolución histórica de la cuota devengada por tipo
@@ -259,12 +223,7 @@ export default function IvaTipos() {
         {loadingHistorico ? (
           <ChartSkeleton height={280} />
         ) : yearsInSeries.length > 0 ? (
-          <LineChart
-            categories={yearsInSeries.map(String)}
-            series={lineSeriesCuota}
-            height={280}
-            smooth
-          />
+          <LineChart categories={yearsInSeries.map(String)} series={lineSeriesCuota} height={280} smooth />
         ) : (
           <p className="py-8 text-center text-sm text-[var(--color-ink-muted)]">Sin datos históricos.</p>
         )}
