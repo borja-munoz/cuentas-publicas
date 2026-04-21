@@ -8,6 +8,9 @@ type NavItem =
 
 const NAV: NavItem[] = [
   { kind: 'link', to: '/', label: 'Inicio', end: true },
+  { kind: 'group', label: 'AAPP' },
+  { kind: 'link', to: '/aapp/ingresos', label: 'Ingresos' },
+  { kind: 'link', to: '/aapp/gastos', label: 'Gastos' },
   { kind: 'group', label: 'Estado' },
   { kind: 'link', to: '/estado/ingresos', label: 'Ingresos' },
   { kind: 'link', to: '/estado/ingresos/impuestos', label: 'Impuestos AEAT', indent: true },

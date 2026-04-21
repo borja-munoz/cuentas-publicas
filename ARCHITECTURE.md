@@ -10,14 +10,16 @@
 │                                          │      │                                           │
 │  scrapers/                               │      │  App.tsx                                  │
 │    aeat.py        ──┐                    │      │    ├── /                (Inicio KPIs)      │
-│    igae.py        ──┤                    │      │    ├── /estado/ingresos (por capítulo)     │
-│    sepg.py        ──┼──► db.py ──► .duckdb ───►│    │     └── /impuestos (detalle AEAT)    │
-│    ss.py          ──┤   (asset estático) │      │    ├── /estado/gastos   (por capítulo)    │
-│    transfer_ccaa.py─┤                    │      │    ├── /ss/ingresos     (SS)              │
-│    ccaa.py        ──┘                    │      │    ├── /ss/gastos       (SS)              │
+│    igae.py        ──┤                    │      │    ├── /           (Inicio AAPP KPIs)    │
+│    sepg.py        ──┼──► db.py ──► .duckdb ───►│    ├── /aapp/ingresos   (SEC2010 AAPP)    │
+│    ss.py          ──┤   (asset estático) │      │    ├── /aapp/gastos     (SEC2010 AAPP)    │
+│    transfer_ccaa.py─┤                    │      │    ├── /estado/ingresos (por capítulo)    │
+│    ccaa.py        ──┤                    │      │    ├── /estado/gastos   (por capítulo)    │
+│    eurostat_aapp.py─┘                     │      │    ├── /ss/ingresos     (SS)              │
+│                                          │      │    ├── /ss/gastos       (SS)              │
 │                                          │      │    ├── /ccaa            (overview + mapa) │
 │                                          │      │    ├── /ccaa/:cod       (detalle CCAA)    │
-│                                          │      │    └── /ccaa/transfer.. (mapa coroplético)│
+│                                          │      │    └── /ccaa/ingresos   (mapa + tabla)    │
 │  GitHub Actions                          │      │                                           │
 │    → cron mensual: scraper + commit      │      │  DuckDB WASM (Web Worker)                 │
 │    → trigger: redeploy a GitHub Pages    │      │                                           │
@@ -44,7 +46,8 @@ cuentas-publicas/
 │       │   ├── sepg.py                   # Plan presupuestario SEPG (2005–2025)
 │       │   ├── seguridad_social.py       # Presupuesto Seguridad Social (2005–2025)
 │       │   ├── transferencias_ccaa.py    # Transferencias Estado → CCAA (derivadas de ccaa_ingresos)
-│       │   └── ccaa.py                   # Presupuestos CCAA (Mº Hacienda SGCIEF, 2002–2023)
+│       │   ├── ccaa.py                   # Presupuestos CCAA (Mº Hacienda SGCIEF, 2002–2023)
+│       │   └── eurostat_aapp.py           # AAPP SEC2010 (Eurostat gov_10a_main + nama_10_gdp)
 │       └── transform/
 │           ├── aeat.py                   # Normalización datos AEAT
 │           ├── igae.py                   # Normalización datos IGAE
@@ -77,7 +80,8 @@ cuentas-publicas/
 │       │       ├── ingresos.ts           # Queries ingresos + CAPITULO_INGRESOS_TOOLTIP
 │       │       ├── gastos.ts             # Queries gastos + CAPITULO_GASTOS_TOOLTIP
 │       │       ├── aeat.ts              # Queries recaudación AEAT + IMPUESTO_COLORS
-│       │       └── ccaa.ts              # Queries CCAA: transferencias, resumen, capítulos
+│       │       ├── ccaa.ts              # Queries CCAA: transferencias, resumen, capítulos
+│       │       └── aapp.ts              # Queries AAPP SEC2010: ingresos, gastos, PIB por subsector
 │       ├── store/
 │       │   └── filters.ts               # Zustand: selectedYear, viewMode, pageFilters (sin entityType)
 │       ├── components/
@@ -100,7 +104,10 @@ cuentas-publicas/
 │       │       ├── InsightsPanel.tsx     # Grid de destacados dinámicos (Insight[])
 │       │       └── InfoTooltip.tsx       # Botón "i" con popover explicativo (portal fixed)
 │       └── pages/
-│           ├── Inicio/index.tsx          # Dashboard: KPIs saldo + líneas ingresos vs gastos
+│           ├── Inicio/index.tsx          # Dashboard AAPP: KPIs ingresos/gastos/saldo + líneas históricas
+│           ├── AAPP/
+│           │   ├── Ingresos.tsx          # Ingresos AAPP SEC2010 por concepto + histórico + tabla
+│           │   └── Gastos.tsx            # Gastos AAPP SEC2010 por concepto + histórico + tabla
 │           ├── Estado/
 │           │   ├── Ingresos.tsx          # Barras por capítulo + línea histórica + tabla (entity='Estado')
 │           │   └── Gastos.tsx            # Barras por capítulo + plan vs ejec integrado + tabla
@@ -141,6 +148,11 @@ cuentas-publicas/
 | Gasto funcional COFOG | Eurostat `gov_10a_exp` | JSON-stat REST API | 1995–2023 | AAPP + 4 subsectores, 10 funciones COFOG |
 | IVA por tipo impositivo | AEAT Modelo 390 | CSV estático | 2005–2022 | Nacional, 3 tipos (21%/10%/4%) |
 | Pensiones contributivas | Mº Inclusión BEL PEN-3 | HTML table | 2000–2024 | 5 tipos de pensión, número e importe medio |
+| Cuentas AAPP SEC2010 | Eurostat `gov_10a_main` | JSON-stat REST API | 1995–actual | 5 subsectores, ~9 conceptos ingresos + ~9 gastos |
+| PIB a precios corrientes | Eurostat `nama_10_gdp` | JSON-stat REST API | 1975–actual | Nacional, M€ corrientes |
+
+- **AAPP SEC2010 (Eurostat gov_10a_main)**: misma API REST que `gov_10a_exp`. 5 peticiones (una por sector). Items de ingresos (TR, D2REC, D5REC, D61REC, D4REC, D7REC, D9REC) y gastos (TE, D1PAY, P2, D3PAY, D41PAY, D62PAY, D7PAY, D9PAY, P51G, B9) en la misma llamada por sector. Mapeo NA_ITEM → concepto canónico en `eurostat_aapp.py`. Cobertura ~1995–actual (último año publicado suele retrasarse 6–12 meses). Pausa 0,5s entre peticiones.
+- **PIB (Eurostat nama_10_gdp)**: `na_item=B1GQ&unit=CP_MEUR&geo=ES`. Una sola petición. Cobertura 1975–actual.
 
 **Notas de descarga:**
 - **AEAT**: ficheros IART por año (2017–2024); histórico 1995–2016 en hoja "1.6" del último IART. User-Agent estándar.
@@ -290,6 +302,38 @@ CREATE TABLE recaudacion_iva_tipo (
     base_imponible   DECIMAL(18,2),      -- M€
     cuota_devengada  DECIMAL(18,2),      -- M€
     PRIMARY KEY (year, tipo)
+);
+
+-- Cuentas AAPP SEC2010 — ingresos consolidados (Eurostat gov_10a_main)
+-- subsector: 'S13' AAPP, 'S1311' Estado, 'S1312' CCAA, 'S1313' CCLL, 'S1314' SS
+-- concepto: 'total','impuestos_produccion','impuestos_renta','cotizaciones',
+--           'rentas_propiedad','transferencias_corrientes','transferencias_capital'
+CREATE TABLE aapp_ingresos (
+    year         INTEGER NOT NULL,
+    subsector    VARCHAR NOT NULL,
+    concepto     VARCHAR NOT NULL,
+    concepto_nom VARCHAR NOT NULL,
+    importe      DECIMAL(18,2),      -- M€ a precios corrientes
+    PRIMARY KEY (year, subsector, concepto)
+);
+
+-- Cuentas AAPP SEC2010 — gastos consolidados (Eurostat gov_10a_main)
+-- concepto: 'total','remuneracion_empleados','consumos_intermedios','subvenciones',
+--           'intereses','prestaciones_sociales','transferencias_corrientes',
+--           'transferencias_capital','fbcf','saldo'
+CREATE TABLE aapp_gastos (
+    year         INTEGER NOT NULL,
+    subsector    VARCHAR NOT NULL,
+    concepto     VARCHAR NOT NULL,
+    concepto_nom VARCHAR NOT NULL,
+    importe      DECIMAL(18,2),
+    PRIMARY KEY (year, subsector, concepto)
+);
+
+-- PIB a precios corrientes (Eurostat nama_10_gdp, na_item=B1GQ, unit=CP_MEUR)
+CREATE TABLE pib_anual (
+    year  INTEGER PRIMARY KEY,
+    pib   DECIMAL(18,2)              -- M€ a precios corrientes
 );
 
 -- Pensiones contributivas SS (Mº Inclusión BEL PEN-3)

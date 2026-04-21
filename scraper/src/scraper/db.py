@@ -180,6 +180,38 @@ CREATE TABLE IF NOT EXISTS gastos_politica (
     PRIMARY KEY (year, politica_nom)
 );
 
+-- Cuentas AAPP SEC2010 — ingresos (Eurostat gov_10a_main, España)
+-- subsector: 'S13'=AAPP, 'S1311'=Estado, 'S1312'=CCAA, 'S1313'=CCLL, 'S1314'=SS
+-- concepto: 'total','impuestos_produccion','impuestos_renta','cotizaciones',
+--           'rentas_propiedad','transferencias_corrientes','transferencias_capital'
+CREATE TABLE IF NOT EXISTS aapp_ingresos (
+    year         INTEGER NOT NULL,
+    subsector    VARCHAR NOT NULL,
+    concepto     VARCHAR NOT NULL,
+    concepto_nom VARCHAR NOT NULL,
+    importe      DECIMAL(18,2),
+    PRIMARY KEY (year, subsector, concepto)
+);
+
+-- Cuentas AAPP SEC2010 — gastos (Eurostat gov_10a_main, España)
+-- concepto: 'total','remuneracion_empleados','consumos_intermedios','subvenciones',
+--           'intereses','prestaciones_sociales','transferencias_corrientes',
+--           'transferencias_capital','fbcf','saldo'
+CREATE TABLE IF NOT EXISTS aapp_gastos (
+    year         INTEGER NOT NULL,
+    subsector    VARCHAR NOT NULL,
+    concepto     VARCHAR NOT NULL,
+    concepto_nom VARCHAR NOT NULL,
+    importe      DECIMAL(18,2),
+    PRIMARY KEY (year, subsector, concepto)
+);
+
+-- PIB a precios corrientes (Eurostat nama_10_gdp, B1GQ, CP_MEUR)
+CREATE TABLE IF NOT EXISTS pib_anual (
+    year  INTEGER PRIMARY KEY,
+    pib   DECIMAL(18,2)
+);
+
 -- Pensiones contributivas SS (mites.gob.es BEL PEN-3, serie anual)
 -- tipo: 'jubilacion', 'incapacidad', 'viudedad', 'orfandad', 'favor_familiar'
 -- importe_total: M€/mes  |  pension_media: €/mes

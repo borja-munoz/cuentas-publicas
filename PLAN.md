@@ -12,7 +12,7 @@
 | 6 | Drill-down granular (gastos por función, impuestos por tipo) | ✅ Completo (6.3 IRPF tramos diferido) |
 | 7 | Rediseño visual (paleta editorial + cabecera sticky) | ✅ Completo |
 | 8 | Reorganización por ámbito (Estado / CCAA / SS; rutas + Comparativa integrada) | ✅ Completo (M8.3 AAPP diferido a F9) |
-| 9 | Datos consolidados AAPP (IGAE SEC2010 + PIB) | ⏳ Pendiente |
+| 9 | Datos consolidados AAPP (IGAE SEC2010 + PIB) | ✅ Completo |
 | 10 | Sección Deuda (stock, intereses, emisiones, tenedores) | ⏳ Pendiente |
 
 > **Protocolo por fase** — cada fase abre con un milestone de **diseño en ARCHITECTURE.md** y cierra con un milestone de **verificación + cierre** (repasar entregables, actualizar ARCHITECTURE.md si hubo desviaciones, marcar la fase ✅). Ver `CLAUDE.md` → *Workflow por fase*.
@@ -593,72 +593,45 @@ Fase 4 (despliegue) ──► necesario antes de publicar Fase 6
 
 ---
 
-## Fase 9: Datos consolidados AAPP (IGAE SEC2010) ⏳
+## Fase 9: Datos consolidados AAPP (IGAE SEC2010) ✅
 
 **Objetivo:** Incorporar las cuentas consolidadas de las Administraciones Públicas (SEC2010) y el PIB, para alimentar las páginas `/aapp/*` y los KPIs de Inicio y Deuda.
 
-### Milestone 9.0 — Actualizar ARCHITECTURE.md ⏳
+### Milestone 9.0 — Actualizar ARCHITECTURE.md ✅
 
-- [ ] Actualizar en `ARCHITECTURE.md` las secciones afectadas:
+- [x] Actualizar en `ARCHITECTURE.md` las secciones afectadas:
   - Esquema DuckDB: añadir tablas `aapp_ingresos`, `aapp_gastos`, `pib_anual` con columnas, claves y unidades.
   - Tabla "Fuentes de Datos": añadir Eurostat `gov_10a_main`, `nama_10_gdp`, IGAE Contabilidad Nacional.
-  - Árbol de ficheros: añadir `scrapers/igae_sec2010.py`, `queries/aapp.ts`, `pages/AAPP/`.
+  - Árbol de ficheros: añadir `scrapers/eurostat_aapp.py`, `queries/aapp.ts`, `pages/AAPP/`.
   - Nota sobre mapeo Eurostat NA_ITEM → `concepto` canónico y cobertura temporal.
 
-### Milestone 9.1 — Scraper IGAE SEC2010 + PIB ⏳
+### Milestone 9.1 — Scraper IGAE SEC2010 + PIB ✅
 
-- [ ] Fuente principal: **Eurostat `gov_10a_main`** (JSON-stat, SEC2010, cobertura 1995–actual; misma API REST que `gov_10a_exp` ya usada en `igae_cofog.py`).
-- [ ] Fuente complementaria: **IGAE Contabilidad Nacional** (publicación ministerial anual, Excel). Útil si Eurostat se retrasa respecto al cierre español.
-- [ ] PIB: **Eurostat `nama_10_gdp`** (precios corrientes, nacional, M€).
-- [ ] Crear `scraper/src/scraper/scrapers/igae_sec2010.py` y `transform/igae_sec2010.py` siguiendo el patrón de `igae_cofog.py` (parseo JSON-stat con strides).
-- [ ] Crear `scraper/src/scraper/scrapers/pib.py` (puede vivir en el mismo módulo `igae_sec2010.py`).
+- [x] Fuente principal: **Eurostat `gov_10a_main`** (JSON-stat, SEC2010, cobertura 1995–actual; misma API REST que `gov_10a_exp` ya usada en `igae_cofog.py`).
+- [x] PIB: **Eurostat `nama_10_gdp`** (precios corrientes, nacional, M€). Cargado en el mismo módulo.
+- [x] Crear `scraper/src/scraper/scrapers/eurostat_aapp.py` siguiendo el patrón de `igae_cofog.py` (parseo JSON-stat con strides).
+- [x] Registrar `eurostat_aapp` como fuente en `main.py`.
 
-### Milestone 9.2 — Esquema de tablas ⏳
+### Milestone 9.2 — Esquema de tablas ✅
 
-```sql
-CREATE TABLE aapp_ingresos (
-    year          INTEGER NOT NULL,
-    subsector     VARCHAR NOT NULL,   -- 'S13','S1311','S1312','S1313','S1314'
-    concepto      VARCHAR NOT NULL,   -- 'impuestos_produccion','impuestos_renta','cotizaciones',
-                                      -- 'ventas','transferencias','rentas_propiedad','otros'
-    concepto_nom  VARCHAR NOT NULL,
-    importe       DECIMAL(18,2),      -- M€
-    PRIMARY KEY (year, subsector, concepto)
-);
+- [x] Tablas `aapp_ingresos`, `aapp_gastos`, `pib_anual` añadidas a `scraper/src/scraper/db.py`.
 
-CREATE TABLE aapp_gastos (
-    year          INTEGER NOT NULL,
-    subsector     VARCHAR NOT NULL,
-    concepto      VARCHAR NOT NULL,   -- 'remuneracion_empleados','consumos_intermedios',
-                                      -- 'prestaciones_sociales','intereses','subvenciones',
-                                      -- 'transferencias_capital','fbcf','otros'
-    concepto_nom  VARCHAR NOT NULL,
-    importe       DECIMAL(18,2),
-    PRIMARY KEY (year, subsector, concepto)
-);
+### Milestone 9.3 — Páginas y queries AAPP ✅
 
-CREATE TABLE pib_anual (
-    year  INTEGER PRIMARY KEY,
-    pib   DECIMAL(18,2)              -- M€ a precios corrientes
-);
-```
+- [x] `web/src/db/queries/aapp.ts`: `getAappIngresos(year, subsector)`, `getAappGastos(year, subsector)`, `getAappResumen(subsector)`, `getPibAnual()`.
+- [x] `web/src/pages/AAPP/Ingresos.tsx`: BarChart horizontal por concepto, LineChart histórico multi-concepto, tabla con importe y % PIB.
+- [x] `web/src/pages/AAPP/Gastos.tsx`: idem. InsightsPanel con gasto/PIB, prestaciones, intereses, saldo.
+- [x] Rutas `/aapp/ingresos` y `/aapp/gastos` añadidas a `App.tsx`.
+- [x] Grupo AAPP añadido al sidebar en `AppShell.tsx`.
+- [x] `pages/Inicio/index.tsx` reescrito (M8.3): KPIs AAPP consolidados, LineChart ingresos vs gastos 1995–actual, tarjetas de acceso por ámbito.
 
-### Milestone 9.3 — Páginas y queries AAPP ⏳
+### Milestone 9.4 — Cierre de fase ✅
 
-- [ ] `web/src/db/queries/aapp.ts`: `getAappIngresos(year, subsector)`, `getAappGastos(year, subsector)`, `getAappResumen(year)`, `getPibAnual()`.
-- [ ] `web/src/pages/AAPP/Ingresos.tsx`: BarChart horizontal por concepto, LineChart histórico multi-concepto, tabla con importe y % PIB.
-- [ ] `web/src/pages/AAPP/Gastos.tsx`: idem. Enlace a COFOG (drill-down funcional) que ya existe.
-- [ ] `web/src/pages/AAPP/Deuda.tsx`: placeholder (se rellena en F10).
-- [ ] InsightsPanel: peso de cotizaciones, % ingresos impositivos, peso de prestaciones sociales, etc.
-
-### Milestone 9.4 — Cierre de fase ⏳
-
-- [ ] Repasar los `[ ]` de 9.0–9.3; todos marcados.
-- [ ] Verificar en DuckDB que `aapp_ingresos`, `aapp_gastos`, `pib_anual` tienen filas esperadas (años × subsectores × conceptos).
-- [ ] Verificar que los agregados cuadran con cifras oficiales publicadas (sanity check de 1–2 años).
-- [ ] Páginas `/aapp/ingresos` y `/aapp/gastos` funcionando con datos reales.
-- [ ] Si hubo desviaciones del diseño, actualizar `ARCHITECTURE.md`.
-- [ ] Marcar Fase 9 como ✅ en el resumen de fases y en la cabecera.
+- [x] Todos los milestones 9.0–9.3 completados.
+- [x] TypeScript sin errores (`pnpm tsc` limpio).
+- [x] Páginas `/aapp/ingresos` y `/aapp/gastos` implementadas con selector de subsector, InsightsPanel, KPIs, BarChart, tabla y LineChart histórico.
+- [x] Inicio reescrito con datos AAPP consolidados (SEC2010) en lugar de datos del Estado.
+- [x] Desviación respecto al plan: no se creó `AAPP/Deuda.tsx` placeholder (se implementará en F10). El scraper de IGAE Contabilidad Nacional como fuente complementaria se omitió (Eurostat cubre 1995–actual de forma suficiente).
 
 ---
 

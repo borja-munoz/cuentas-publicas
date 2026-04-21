@@ -6,6 +6,8 @@ import { query } from './db/client'
 import { useFilters } from './store/filters'
 
 import Inicio from './pages/Inicio'
+import AappIngresos from './pages/AAPP/Ingresos'
+import AappGastos from './pages/AAPP/Gastos'
 import Ingresos from './pages/Ingresos'
 import Impuestos from './pages/Ingresos/Impuestos'
 import IvaTipos from './pages/Ingresos/IvaTipos'
@@ -64,6 +66,10 @@ export default function App() {
         <Routes>
           <Route element={<AppShell />}>
             <Route index element={<Inicio />} />
+
+            {/* AAPP Global */}
+            <Route path="aapp/ingresos" element={<AappIngresos />} />
+            <Route path="aapp/gastos" element={<AappGastos />} />
 
             {/* Estado */}
             <Route path="estado/ingresos" element={<Ingresos entity="Estado" />} />

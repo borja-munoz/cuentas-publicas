@@ -20,7 +20,7 @@ console = Console()
 
 SOURCES = [
     "aeat", "sepg", "igae", "seguridad_social", "transferencias_ccaa", "ccaa",
-    "cofog", "iva_tipos", "pensiones", "sepg_politicas",
+    "cofog", "iva_tipos", "pensiones", "sepg_politicas", "eurostat_aapp",
 ]
 
 
@@ -109,6 +109,9 @@ def _run_source(conn, source: str, year: int | None) -> None:
     elif source == "sepg_politicas":
         from scraper.scrapers.sepg_politicas import run as run_politicas
         run_politicas(conn, year=year)
+    elif source == "eurostat_aapp":
+        from scraper.scrapers.eurostat_aapp import run as run_sec2010
+        run_sec2010(conn, year=year)
     else:
         raise ValueError(f"Fuente desconocida: {source}")
 
