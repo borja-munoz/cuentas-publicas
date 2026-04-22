@@ -223,6 +223,16 @@ CREATE TABLE IF NOT EXISTS pensiones_ss (
     pension_media  DECIMAL(10,2),
     PRIMARY KEY (year, tipo)
 );
+
+-- Deuda PDE por subsector (Eurostat gov_10dd_edpt1, España)
+-- subsector: 'S13'=AAPP, 'S1311'=Estado, 'S1312'=CCAA, 'S1313'=CCLL, 'S1314'=SS
+-- Indicador GD (Gross Debt) — deuda bruta consolidada metodología Maastricht  |  M€
+CREATE TABLE IF NOT EXISTS deuda_pde (
+    year      INTEGER NOT NULL,
+    subsector VARCHAR NOT NULL,
+    importe   DECIMAL(18,2),
+    PRIMARY KEY (year, subsector)
+);
 """
 
 _VIEWS = """

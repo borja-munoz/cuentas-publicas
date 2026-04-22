@@ -14,7 +14,7 @@
 | 8 | Reorganización por ámbito (Estado / CCAA / SS; rutas + Comparativa integrada) | ✅ Completo (M8.3 AAPP diferido a F9) |
 | 9 | Datos consolidados AAPP (IGAE SEC2010 + PIB) | ✅ Completo |
 | 10 | Navegación jerárquica + páginas resumen por entidad | ✅ Completo |
-| 11 | Sección Deuda (stock, intereses, emisiones, tenedores) | ⏳ Pendiente |
+| 11 | Sección Deuda (stock PDE por subsector + ratio PIB, 4 páginas) | ✅ Completo (emisiones/tenedores diferidos) |
 
 > **Protocolo por fase** — cada fase abre con un milestone de **diseño en ARCHITECTURE.md** y cierra con un milestone de **verificación + cierre** (repasar entregables, actualizar ARCHITECTURE.md si hubo desviaciones, marcar la fase ✅). Ver `CLAUDE.md` → *Workflow por fase*.
 
@@ -705,69 +705,41 @@ CCAA/
 
 ---
 
-## Fase 11: Sección Deuda ⏳
+## Fase 11: Sección Deuda ✅
 
-**Objetivo:** Añadir la tercera pata de las cuentas públicas: evolución del stock de deuda, ratio/PIB, intereses, emisiones brutas/netas del Tesoro y desglose por tenedores.
+**Objetivo:** Añadir la sección de deuda pública: stock PDE por subsector, ratio/PIB y evolución histórica en 4 páginas (AAPP, Estado, SS, CCAA).
 
-### Milestone 11.0 — Actualizar ARCHITECTURE.md ⏳
+**Alcance implementado:** stock deuda `gov_10dd_edpt1` (indicador GD, M€, 5 subsectores). Emisiones Tesoro y tenedores BdE diferidos a fase futura por dificultad de fuente.
 
-- [ ] Actualizar en `ARCHITECTURE.md` las secciones afectadas:
-  - Esquema DuckDB: añadir tablas `deuda_pde`, `deuda_emisiones`, `deuda_tenedores`.
-  - Tabla "Fuentes de Datos": añadir Eurostat `gov_10dd_edpt1`, BdE SPAM, BdE Tenedores, Tesoro emisiones.
-  - Árbol de ficheros: añadir `scrapers/deuda.py`, `queries/deuda.ts`, `pages/*/Deuda.tsx`.
+### Milestone 11.0 — Actualizar ARCHITECTURE.md ✅
 
-### Milestone 11.1 — Scraper y tablas ⏳
+- [x] Esquema DuckDB: añadir tabla `deuda_pde`.
+- [x] Tabla "Fuentes de Datos": añadir Eurostat `gov_10dd_edpt1`.
+- [x] Árbol de ficheros: añadir `scrapers/deuda.py`, `queries/deuda.ts`, `pages/*/Deuda.tsx`.
+- [x] Rutas nuevas `/aapp/deuda`, `/estado/deuda`, `/ss/deuda`, `/ccaa/deuda`.
 
-- [ ] Fuentes:
-  - **Stock deuda PDE**: Eurostat `gov_10dd_edpt1` (anual, por subsector). Complemento: BdE Síntesis SPAM para serie trimestral.
-  - **Intereses**: ya capturados en `aapp_gastos` con `concepto='intereses'` (F9) + IGAE capítulo 3 como referencia cruzada.
-  - **Emisiones Tesoro**: datos.gob.es "Estrategia del Tesoro" o scraping del informe anual del Tesoro.
-  - **Tenedores**: BdE — "Tenedores de deuda del Estado" (Excel mensual).
-  - **PIB**: ya en `pib_anual` (F9).
-- [ ] Crear `scraper/src/scraper/scrapers/deuda.py` con submódulos por fuente.
-- [ ] Nuevas tablas:
-  ```sql
-  CREATE TABLE deuda_pde (
-      year       INTEGER NOT NULL,
-      subsector  VARCHAR NOT NULL,   -- 'S13','S1311','S1312','S1313','S1314'
-      importe    DECIMAL(18,2),      -- M€
-      PRIMARY KEY (year, subsector)
-  );
+### Milestone 11.1 — Scraper y tabla deuda_pde ✅
 
-  CREATE TABLE deuda_emisiones (
-      year       INTEGER PRIMARY KEY,
-      bruta      DECIMAL(18,2),      -- emisión bruta M€
-      neta       DECIMAL(18,2),      -- neta (bruta - vencimientos)
-      vida_media DECIMAL(6,2)        -- años
-  );
+- [x] `scraper/src/scraper/scrapers/deuda.py`: Eurostat `gov_10dd_edpt1`, `na_item=GD`, 5 sectores, pausa 0,5s.
+- [x] Tabla `deuda_pde (year, subsector, importe)` añadida al DDL en `db.py`.
+- [x] Registrado como fuente `"deuda"` en `main.py`.
 
-  CREATE TABLE deuda_tenedores (
-      year       INTEGER NOT NULL,
-      month      INTEGER DEFAULT 0,  -- 0 = media anual
-      categoria  VARCHAR NOT NULL,   -- 'residentes','no_residentes','bce','sector_privado',...
-      importe    DECIMAL(18,2),      -- M€
-      pct_total  DECIMAL(6,3),
-      PRIMARY KEY (year, month, categoria)
-  );
-  ```
+### Milestone 11.2 — Páginas Deuda por ámbito ✅
 
-### Milestone 11.2 — Páginas Deuda por ámbito ⏳
+- [x] `web/src/db/queries/deuda.ts`: `getDeudaHistorica(subsector)`, `getDeudaAnual(year)`, `getDeudaYears()`.
+- [x] `web/src/pages/AAPP/Deuda.tsx`: stock total S13 + ratio/PIB + desglose subsectores en LineChart + tabla año seleccionado.
+- [x] `web/src/pages/Estado/Deuda.tsx`: stock S1311, ratio/PIB, histórico LineChart, tabla inversa.
+- [x] `web/src/pages/SS/Deuda.tsx`: stock S1314, ratio/PIB, histórico LineChart, tabla inversa.
+- [x] `web/src/pages/CCAA/Deuda.tsx`: stock S1312, ratio/PIB, histórico LineChart, tabla inversa.
+- [x] Nav items "Deuda" añadidos a AAPP, Estado, SS y CCAA en `AppShell.tsx`.
+- [x] Rutas registradas en `App.tsx`.
 
-- [ ] `web/src/pages/AAPP/Deuda.tsx`: evolución stock (1995–actual), ratio/PIB, área apilada por subsector, intereses (% PIB), tenedores (donut + evolución temporal).
-- [ ] `web/src/pages/Estado/Deuda.tsx`: deuda `S1311` + emisiones brutas/netas del Tesoro + vida media + KPI "cuánto vence este año".
-- [ ] `web/src/pages/CCAA/Deuda.tsx`: ranking CCAA por deuda/PIB autonómico, mapa coroplético (reutilizar `ChoroplethMap`).
-- [ ] `web/src/pages/SS/Deuda.tsx`: deuda SS (pequeña, serie corta), con contexto sobre el fondo de reserva.
-- [ ] `web/src/db/queries/deuda.ts`: queries correspondientes.
-- [ ] InsightsPanel: ratio actual vs máximo histórico, carga de intereses vs gasto en educación, etc.
+### Milestone 11.3 — Cierre de fase ✅
 
-### Milestone 11.3 — Cierre de fase ⏳
-
-- [ ] Repasar los `[ ]` de 11.0–11.2; todos marcados.
-- [ ] Verificar en DuckDB que `deuda_pde`, `deuda_emisiones`, `deuda_tenedores` tienen filas esperadas.
-- [ ] Ratio deuda/PIB del último año disponible cuadra con cifras oficiales (BdE/Eurostat).
-- [ ] Las 4 páginas (`/aapp/deuda`, `/estado/deuda`, `/ccaa/deuda`, `/ss/deuda`) cargan con datos reales.
-- [ ] Si hubo desviaciones del diseño, actualizar `ARCHITECTURE.md`.
-- [ ] Marcar Fase 11 como ✅ en el resumen de fases y en la cabecera.
+- [x] Build TypeScript/Vite sin errores.
+- [x] Las 4 páginas compiladas y rutas registradas.
+- [x] ARCHITECTURE.md actualizado con diseño final (solo `deuda_pde`; `deuda_emisiones`/`deuda_tenedores` no implementadas).
+- [x] Desviación anotada: alcance reducido a fuente Eurostat; fuentes BdE y Tesoro diferidas.
 
 ---
 

@@ -15,11 +15,14 @@
 │    ss.py          ──┤   (asset estático) │      │    ├── /estado        (resumen Estado)    │
 │    transfer_ccaa.py─┤                    │      │    ├── /estado/ingresos · /gastos         │
 │    ccaa.py        ──┤                    │      │    ├── /ss            (resumen SS)         │
-│    eurostat_aapp.py─┘                     │      │    ├── /ss/ingresos · /gastos             │
-│                                          │      │    ├── /ccaa          (resumen CCAA)       │
+│    eurostat_aapp.py─┤                    │      │    ├── /ss/ingresos · /gastos             │
+│    deuda.py       ──┘                    │      │    ├── /ccaa          (resumen CCAA)       │
 │                                          │      │    ├── /ccaa/ingresos (transferencias)     │
 │                                          │      │    ├── /ccaa/gastos   (mapa + drill-down)  │
-│                                          │      │    └── /ccaa/:cod     (detalle CCAA)       │
+│                                          │      │    ├── /ccaa/:cod     (detalle CCAA)       │
+│                                          │      │    ├── /aapp/deuda   (deuda PDE AAPP)      │
+│                                          │      │    ├── /estado/deuda · /ss/deuda           │
+│                                          │      │    └── /ccaa/deuda   (deuda CCAA)          │
 │  GitHub Actions                          │      │                                           │
 │    → cron mensual: scraper + commit      │      │  DuckDB WASM (Web Worker)                 │
 │    → trigger: redeploy a GitHub Pages    │      │                                           │
@@ -47,7 +50,8 @@ cuentas-publicas/
 │       │   ├── seguridad_social.py       # Presupuesto Seguridad Social (2005–2025)
 │       │   ├── transferencias_ccaa.py    # Transferencias Estado → CCAA (derivadas de ccaa_ingresos)
 │       │   ├── ccaa.py                   # Presupuestos CCAA (Mº Hacienda SGCIEF, 2002–2023)
-│       │   └── eurostat_aapp.py           # AAPP SEC2010 (Eurostat gov_10a_main + nama_10_gdp)
+│       │   ├── eurostat_aapp.py           # AAPP SEC2010 (Eurostat gov_10a_main + nama_10_gdp)
+│       │   └── deuda.py                  # Deuda PDE por subsector (Eurostat gov_10dd_edpt1)
 │       └── transform/
 │           ├── aeat.py                   # Normalización datos AEAT
 │           ├── igae.py                   # Normalización datos IGAE
@@ -85,7 +89,8 @@ cuentas-publicas/
 │       │       ├── cofog.ts             # Queries gasto funcional COFOG + COFOG_NAMES/COLORS
 │       │       ├── gastos_politica.ts   # Queries políticas de gasto PGE consolidado
 │       │       ├── iva_tipos.ts         # Queries IVA por tipo impositivo
-│       │       └── pensiones.ts         # Queries pensiones contributivas SS
+│       │       ├── pensiones.ts         # Queries pensiones contributivas SS
+│       │       └── deuda.ts            # Queries deuda PDE por subsector (getDeudaHistorica, getDeudaAnual)
 │       ├── store/
 │       │   └── filters.ts               # Zustand: selectedYear, viewMode, pageFilters (sin entityType)
 │       ├── components/
@@ -111,9 +116,11 @@ cuentas-publicas/
 │           ├── Inicio/index.tsx          # Dashboard AAPP: KPIs ingresos/gastos/saldo + líneas históricas
 │           ├── AAPP/
 │           │   ├── Ingresos.tsx          # Ingresos AAPP SEC2010 por concepto + histórico + tabla
-│           │   └── Gastos.tsx            # Gastos AAPP SEC2010 por concepto + histórico + tabla
+│           │   ├── Gastos.tsx            # Gastos AAPP SEC2010 por concepto + histórico + tabla
+│           │   └── Deuda.tsx             # Deuda PDE: stock total + ratio PIB + breakdown subsectores
 │           ├── Estado/
 │           │   ├── index.tsx             # Resumen Estado: KPIs + LineChart histórico + tabla
+│           │   ├── Deuda.tsx             # Deuda Estado (S1311): stock + ratio PIB + histórico
 │           │   ├── Ingresos/
 │           │   │   ├── index.tsx         # Por capítulo + plan vs ejec (entity='Estado' hardcodeado)
 │           │   │   ├── Impuestos.tsx     # Líneas IRPF/IVA/Sociedades 1995–2024 + tabla (AEAT)
@@ -123,12 +130,14 @@ cuentas-publicas/
 │           │       └── Funcion.tsx       # Gasto funcional COFOG sector S13 AAPP
 │           ├── SS/
 │           │   ├── index.tsx             # Resumen SS: KPIs + LineChart histórico + tabla
+│           │   ├── Deuda.tsx             # Deuda SS (S1314): stock + ratio PIB + histórico
 │           │   ├── Ingresos.tsx          # Por capítulo + plan vs ejec (entity='SS' hardcodeado)
 │           │   └── Gastos/
 │           │       ├── index.tsx         # Por capítulo + plan vs ejec (entity='SS'; sin vista política)
 │           │       └── Pensiones.tsx     # Pensiones contributivas: barras, líneas, tabla
 │           └── CCAA/
 │               ├── index.tsx             # Resumen CCAA: KPIs + LineChart histórico + tabla todas CCAA
+│               ├── Deuda.tsx             # Deuda CCAA (S1312): stock + ratio PIB + histórico
 │               ├── Ingresos.tsx          # Transferencias Estado→CCAA: mapa + serie + tabla
 │               ├── Gastos.tsx            # Gastos CCAA: mapa coroplético + drill-down por capítulo
 │               └── Detalle.tsx           # Detalle CCAA: KPIs + tabs Gastos/Ingresos/Comparativa
@@ -160,9 +169,11 @@ cuentas-publicas/
 | Pensiones contributivas | Mº Inclusión BEL PEN-3 | HTML table | 2000–2024 | 5 tipos de pensión, número e importe medio |
 | Cuentas AAPP SEC2010 | Eurostat `gov_10a_main` | JSON-stat REST API | 1995–actual | 5 subsectores, ~9 conceptos ingresos + ~9 gastos |
 | PIB a precios corrientes | Eurostat `nama_10_gdp` | JSON-stat REST API | 1975–actual | Nacional, M€ corrientes |
+| Deuda PDE (stock) | Eurostat `gov_10dd_edpt1` | JSON-stat REST API | 1995–actual | 5 subsectores (S13/S1311/S1312/S1313/S1314), M€ |
 
 - **AAPP SEC2010 (Eurostat gov_10a_main)**: misma API REST que `gov_10a_exp`. 5 peticiones (una por sector). Items de ingresos (TR, D2REC, D5REC, D61REC, D4REC, D7REC, D9REC) y gastos (TE, D1PAY, P2, D3PAY, D41PAY, D62PAY, D7PAY, D9PAY, P51G, B9) en la misma llamada por sector. Mapeo NA_ITEM → concepto canónico en `eurostat_aapp.py`. Cobertura ~1995–actual (último año publicado suele retrasarse 6–12 meses). Pausa 0,5s entre peticiones.
 - **PIB (Eurostat nama_10_gdp)**: `na_item=B1GQ&unit=CP_MEUR&geo=ES`. Una sola petición. Cobertura 1975–actual.
+- **Deuda PDE (Eurostat gov_10dd_edpt1)**: `na_item=GD&unit=MIO_EUR&geo=ES`. 5 peticiones (una por sector). Indicador Maastricht — deuda bruta consolidada del sector en M€. Cobertura ~1995–actual (retraso habitual 6–12 meses). Pausa 0,5s entre peticiones.
 
 **Notas de descarga:**
 - **AEAT**: ficheros IART por año (2017–2024); histórico 1995–2016 en hoja "1.6" del último IART. User-Agent estándar.
@@ -354,6 +365,16 @@ CREATE TABLE pensiones_ss (
     importe_total  DECIMAL(18,2),      -- M€/año (importe mensual × 12)
     pension_media  DECIMAL(10,2),      -- €/mes
     PRIMARY KEY (year, tipo)
+);
+
+-- Deuda PDE (Procedimiento de Déficit Excesivo) por subsector (Eurostat gov_10dd_edpt1)
+-- subsector: 'S13' AAPP, 'S1311' Estado, 'S1312' CCAA, 'S1313' CCLL, 'S1314' SS
+-- Indicador: GD (Gross Debt) — deuda bruta consolidada en metodología Maastricht
+CREATE TABLE deuda_pde (
+    year      INTEGER NOT NULL,
+    subsector VARCHAR NOT NULL,
+    importe   DECIMAL(18,2),           -- M€ a precios corrientes
+    PRIMARY KEY (year, subsector)
 );
 ```
 

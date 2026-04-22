@@ -12,6 +12,7 @@ const NAV: NavItem[] = [
   { kind: 'group', label: 'AAPP' },
   { kind: 'link', to: '/aapp/ingresos', label: 'Ingresos' },
   { kind: 'link', to: '/aapp/gastos', label: 'Gastos' },
+  { kind: 'link', to: '/aapp/deuda', label: 'Deuda' },
 
   { kind: 'group', label: 'Estado', to: '/estado' },
   { kind: 'link', to: '/estado/ingresos', label: 'Ingresos' },
@@ -19,15 +20,18 @@ const NAV: NavItem[] = [
   { kind: 'link', to: '/estado/ingresos/impuestos/iva', label: 'IVA por tipo', level: 2 },
   { kind: 'link', to: '/estado/gastos', label: 'Gastos' },
   { kind: 'link', to: '/estado/gastos/funcion', label: 'Gasto por función', level: 1 },
+  { kind: 'link', to: '/estado/deuda', label: 'Deuda' },
 
   { kind: 'group', label: 'Seguridad Social', to: '/ss' },
   { kind: 'link', to: '/ss/ingresos', label: 'Ingresos' },
   { kind: 'link', to: '/ss/gastos', label: 'Gastos' },
   { kind: 'link', to: '/ss/gastos/pensiones', label: 'Pensiones', level: 1 },
+  { kind: 'link', to: '/ss/deuda', label: 'Deuda' },
 
   { kind: 'group', label: 'CCAA', to: '/ccaa' },
   { kind: 'link', to: '/ccaa/ingresos', label: 'Ingresos' },
   { kind: 'link', to: '/ccaa/gastos', label: 'Gastos' },
+  { kind: 'link', to: '/ccaa/deuda', label: 'Deuda' },
 ]
 
 const GROUP_LABEL_CLASS =

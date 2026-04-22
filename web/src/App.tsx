@@ -8,8 +8,10 @@ import { useFilters } from './store/filters'
 import Inicio from './pages/Inicio'
 import AappIngresos from './pages/AAPP/Ingresos'
 import AappGastos from './pages/AAPP/Gastos'
+import AappDeuda from './pages/AAPP/Deuda'
 
 import EstadoResumen from './pages/Estado'
+import EstadoDeuda from './pages/Estado/Deuda'
 import EstadoIngresos from './pages/Estado/Ingresos'
 import Impuestos from './pages/Estado/Ingresos/Impuestos'
 import IvaTipos from './pages/Estado/Ingresos/IvaTipos'
@@ -17,11 +19,13 @@ import EstadoGastos from './pages/Estado/Gastos'
 import GastosFuncion from './pages/Estado/Gastos/Funcion'
 
 import SSResumen from './pages/SS'
+import SSDeuda from './pages/SS/Deuda'
 import SSIngresos from './pages/SS/Ingresos'
 import SSGastos from './pages/SS/Gastos'
 import Pensiones from './pages/SS/Gastos/Pensiones'
 
 import CcaaResumen from './pages/CCAA'
+import CcaaDeuda from './pages/CCAA/Deuda'
 import CcaaIngresos from './pages/CCAA/Ingresos'
 import CcaaGastos from './pages/CCAA/Gastos'
 import CcaaDetalle from './pages/CCAA/Detalle'
@@ -78,9 +82,11 @@ export default function App() {
             {/* AAPP Global */}
             <Route path="aapp/ingresos" element={<AappIngresos />} />
             <Route path="aapp/gastos" element={<AappGastos />} />
+            <Route path="aapp/deuda" element={<AappDeuda />} />
 
             {/* Estado */}
             <Route path="estado" element={<EstadoResumen />} />
+            <Route path="estado/deuda" element={<EstadoDeuda />} />
             <Route path="estado/ingresos" element={<EstadoIngresos />} />
             <Route path="estado/ingresos/impuestos" element={<Impuestos />} />
             <Route path="estado/ingresos/impuestos/iva" element={<IvaTipos />} />
@@ -89,12 +95,14 @@ export default function App() {
 
             {/* Seguridad Social */}
             <Route path="ss" element={<SSResumen />} />
+            <Route path="ss/deuda" element={<SSDeuda />} />
             <Route path="ss/ingresos" element={<SSIngresos />} />
             <Route path="ss/gastos" element={<SSGastos />} />
             <Route path="ss/gastos/pensiones" element={<Pensiones />} />
 
             {/* CCAA */}
             <Route path="ccaa" element={<CcaaResumen />} />
+            <Route path="ccaa/deuda" element={<CcaaDeuda />} />
             <Route path="ccaa/ingresos" element={<CcaaIngresos />} />
             <Route path="ccaa/gastos" element={<CcaaGastos />} />
             <Route path="ccaa/:cod" element={<CcaaDetalle />} />
