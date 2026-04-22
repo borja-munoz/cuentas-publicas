@@ -162,6 +162,27 @@ export async function getCcaaIngresosPorCapituloNacional(
   `)
 }
 
+// Totales agregados de todas las CCAA por año (para página de resumen CCAA)
+export async function getCcaaResumenHistorico(): Promise<{
+  year: number
+  ingresos_plan: number
+  ingresos_ejec: number
+  gastos_plan: number
+  gastos_ejec: number
+}[]> {
+  return query(`
+    SELECT
+      year,
+      CAST(SUM(ingresos_plan) / 1000.0 AS DOUBLE) AS ingresos_plan,
+      CAST(SUM(ingresos_ejec) / 1000.0 AS DOUBLE) AS ingresos_ejec,
+      CAST(SUM(gastos_plan)   / 1000.0 AS DOUBLE) AS gastos_plan,
+      CAST(SUM(gastos_ejec)   / 1000.0 AS DOUBLE) AS gastos_ejec
+    FROM cp.v_ccaa_resumen
+    GROUP BY year
+    ORDER BY year
+  `)
+}
+
 // Años disponibles en las tablas CCAA
 export async function getCcaaYears(): Promise<number[]> {
   const rows = await query<{ year: number }>(

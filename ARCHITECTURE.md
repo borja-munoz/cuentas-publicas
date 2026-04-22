@@ -9,17 +9,17 @@
 │  PIPELINE DE DATOS (Python / CI)         │      │  NAVEGADOR (React + DuckDB WASM)          │
 │                                          │      │                                           │
 │  scrapers/                               │      │  App.tsx                                  │
-│    aeat.py        ──┐                    │      │    ├── /                (Inicio KPIs)      │
-│    igae.py        ──┤                    │      │    ├── /           (Inicio AAPP KPIs)    │
-│    sepg.py        ──┼──► db.py ──► .duckdb ───►│    ├── /aapp/ingresos   (SEC2010 AAPP)    │
-│    ss.py          ──┤   (asset estático) │      │    ├── /aapp/gastos     (SEC2010 AAPP)    │
-│    transfer_ccaa.py─┤                    │      │    ├── /estado/ingresos (por capítulo)    │
-│    ccaa.py        ──┤                    │      │    ├── /estado/gastos   (por capítulo)    │
-│    eurostat_aapp.py─┘                     │      │    ├── /ss/ingresos     (SS)              │
-│                                          │      │    ├── /ss/gastos       (SS)              │
-│                                          │      │    ├── /ccaa            (overview + mapa) │
-│                                          │      │    ├── /ccaa/:cod       (detalle CCAA)    │
-│                                          │      │    └── /ccaa/ingresos   (mapa + tabla)    │
+│    aeat.py        ──┐                    │      │    ├── /                      (Inicio)    │
+│    igae.py        ──┤                    │      │    ├── /aapp/ingresos  (AAPP SEC2010)     │
+│    sepg.py        ──┼──► db.py ──► .duckdb ───►│    ├── /aapp/gastos   (AAPP SEC2010)     │
+│    ss.py          ──┤   (asset estático) │      │    ├── /estado        (resumen Estado)    │
+│    transfer_ccaa.py─┤                    │      │    ├── /estado/ingresos · /gastos         │
+│    ccaa.py        ──┤                    │      │    ├── /ss            (resumen SS)         │
+│    eurostat_aapp.py─┘                     │      │    ├── /ss/ingresos · /gastos             │
+│                                          │      │    ├── /ccaa          (resumen CCAA)       │
+│                                          │      │    ├── /ccaa/ingresos (transferencias)     │
+│                                          │      │    ├── /ccaa/gastos   (mapa + drill-down)  │
+│                                          │      │    └── /ccaa/:cod     (detalle CCAA)       │
 │  GitHub Actions                          │      │                                           │
 │    → cron mensual: scraper + commit      │      │  DuckDB WASM (Web Worker)                 │
 │    → trigger: redeploy a GitHub Pages    │      │                                           │
@@ -77,11 +77,15 @@ cuentas-publicas/
 │       ├── db/
 │       │   ├── client.ts                 # Singleton DuckDB WASM (getDB, query<T>)
 │       │   └── queries/
-│       │       ├── ingresos.ts           # Queries ingresos + CAPITULO_INGRESOS_TOOLTIP
+│       │       ├── ingresos.ts           # Queries ingresos + CAPITULO_INGRESOS_TOOLTIP + getResumenAnualCompleto
 │       │       ├── gastos.ts             # Queries gastos + CAPITULO_GASTOS_TOOLTIP
 │       │       ├── aeat.ts              # Queries recaudación AEAT + IMPUESTO_COLORS
-│       │       ├── ccaa.ts              # Queries CCAA: transferencias, resumen, capítulos
-│       │       └── aapp.ts              # Queries AAPP SEC2010: ingresos, gastos, PIB por subsector
+│       │       ├── ccaa.ts              # Queries CCAA: transferencias, resumen, getCcaaResumenHistorico
+│       │       ├── aapp.ts              # Queries AAPP SEC2010: ingresos, gastos, PIB por subsector
+│       │       ├── cofog.ts             # Queries gasto funcional COFOG + COFOG_NAMES/COLORS
+│       │       ├── gastos_politica.ts   # Queries políticas de gasto PGE consolidado
+│       │       ├── iva_tipos.ts         # Queries IVA por tipo impositivo
+│       │       └── pensiones.ts         # Queries pensiones contributivas SS
 │       ├── store/
 │       │   └── filters.ts               # Zustand: selectedYear, viewMode, pageFilters (sin entityType)
 │       ├── components/
@@ -109,18 +113,24 @@ cuentas-publicas/
 │           │   ├── Ingresos.tsx          # Ingresos AAPP SEC2010 por concepto + histórico + tabla
 │           │   └── Gastos.tsx            # Gastos AAPP SEC2010 por concepto + histórico + tabla
 │           ├── Estado/
-│           │   ├── Ingresos.tsx          # Barras por capítulo + línea histórica + tabla (entity='Estado')
-│           │   └── Gastos.tsx            # Barras por capítulo + plan vs ejec integrado + tabla
+│           │   ├── index.tsx             # Resumen Estado: KPIs + LineChart histórico + tabla
+│           │   ├── Ingresos/
+│           │   │   ├── index.tsx         # Por capítulo + plan vs ejec (entity='Estado' hardcodeado)
+│           │   │   ├── Impuestos.tsx     # Líneas IRPF/IVA/Sociedades 1995–2024 + tabla (AEAT)
+│           │   │   └── IvaTipos.tsx      # IVA por tipo impositivo (base + cuota)
+│           │   └── Gastos/
+│           │       ├── index.tsx         # Por capítulo + política de gasto + plan vs ejec
+│           │       └── Funcion.tsx       # Gasto funcional COFOG sector S13 AAPP
 │           ├── SS/
-│           │   ├── Ingresos.tsx          # Igual estructura que Estado/Ingresos (entity='SS')
-│           │   └── Gastos.tsx            # Igual estructura que Estado/Gastos (entity='SS')
-│           ├── Ingresos/
-│           │   └── Impuestos.tsx         # Líneas IRPF/IVA/Sociedades (1995–2024) + tabla (AEAT)
-│           ├── Gastos/
-│           │   └── Funcion.tsx           # Gasto funcional COFOG sector S13 AAPP
-│           ├── Transferencias/index.tsx  # Mapa coroplético + ranking + serie histórica
+│           │   ├── index.tsx             # Resumen SS: KPIs + LineChart histórico + tabla
+│           │   ├── Ingresos.tsx          # Por capítulo + plan vs ejec (entity='SS' hardcodeado)
+│           │   └── Gastos/
+│           │       ├── index.tsx         # Por capítulo + plan vs ejec (entity='SS'; sin vista política)
+│           │       └── Pensiones.tsx     # Pensiones contributivas: barras, líneas, tabla
 │           └── CCAA/
-│               ├── index.tsx             # Overview: mapa + drill-down por capítulo + tabla
+│               ├── index.tsx             # Resumen CCAA: KPIs + LineChart histórico + tabla todas CCAA
+│               ├── Ingresos.tsx          # Transferencias Estado→CCAA: mapa + serie + tabla
+│               ├── Gastos.tsx            # Gastos CCAA: mapa coroplético + drill-down por capítulo
 │               └── Detalle.tsx           # Detalle CCAA: KPIs + tabs Gastos/Ingresos/Comparativa
 │
 ├── .github/
@@ -424,14 +434,17 @@ Para gráficas con 3+ series se usa el array `CATEGORICAL` (8 colores en orden, 
 
 ### Layout — TopBar sticky y arquitectura de ámbito
 
-El ámbito (Estado / SS / CCAA) se encoda en la URL, **no** en el store global. No existe `entityType` en Zustand. Las páginas reciben el ámbito como prop estático desde `App.tsx`:
+El ámbito (Estado / SS / CCAA) se encoda en la URL, **no** en el store global. No existe `entityType` en Zustand. Las páginas hardcodean la entidad como constante de módulo (no como prop):
 
 ```typescript
-<Route path="estado/ingresos" element={<EstadoIngresos entity="Estado" />} />
-<Route path="ss/ingresos"     element={<EstadoIngresos entity="SS" />} />
+// pages/Estado/Ingresos/index.tsx
+const entity = 'Estado'
+
+// pages/SS/Ingresos.tsx
+const entity = 'SS'
 ```
 
-La sidebar se agrupa por ámbito (Estado · Seguridad Social · CCAA), usando `NavLink` de React Router. No hay toggle de entidad; la navegación es la fuente de verdad.
+La sidebar se agrupa por ámbito. Los encabezados **Estado**, **Seguridad Social** y **CCAA** son `NavLink` que apuntan a sus páginas de resumen (`/estado`, `/ss`, `/ccaa`). Los enlaces de subpáginas usan `level: 1` (sangría 1rem, `text-xs`) o `level: 2` (sangría 2rem) para representar la jerarquía visual correcta. No hay toggle de entidad; la navegación es la fuente de verdad.
 
 `TopBar.tsx` es una barra `sticky top-0` con solo `YearSelector` + `ViewModeToggle` condicional. Sin `EntityToggle`.
 
@@ -445,9 +458,9 @@ useEffect(() => {
 ```
 
 Páginas con `showViewMode: true`: Estado/Ingresos, Estado/Gastos, SS/Ingresos, SS/Gastos.
-Páginas sin toggle: Inicio, Impuestos AEAT, IVA, Gasto por función, Pensiones, Transferencias, CCAA.
+Páginas sin toggle: Inicio, Estado (resumen), SS (resumen), CCAA (resumen), Impuestos AEAT, IVA, Gasto por función, Pensiones, CCAA/Ingresos, CCAA/Gastos.
 
-**Redirects desde rutas antiguas:** `/ingresos` → `/estado/ingresos`, `/gastos` → `/estado/gastos`, `/comparativa` → `/estado/gastos`, `/transferencias` → `/ccaa/transferencias`.
+**Redirects activos:** `/ingresos` → `/estado/ingresos`, `/gastos` → `/estado/gastos`, `/comparativa` → `/estado/gastos`, `/transferencias` → `/ccaa/ingresos`, `/ccaa/transferencias` → `/ccaa/ingresos`.
 
 ### Unidades monetarias
 

@@ -145,3 +145,46 @@ export async function getResumenAnual(entidad: string): Promise<
     ORDER BY i.year
   `)
 }
+
+// Ingresos y gastos plan + ejecución por año (para páginas de resumen de entidad)
+export async function getResumenAnualCompleto(entidad: string): Promise<{
+  year: number
+  ingresos_plan: number
+  ingresos_ejec: number
+  gastos_plan: number
+  gastos_ejec: number
+}[]> {
+  return query(`
+    SELECT
+      ip.year,
+      CAST(ip.ingresos_plan AS DOUBLE) AS ingresos_plan,
+      CAST(COALESCE(ie.ingresos_ejec, 0) AS DOUBLE) AS ingresos_ejec,
+      CAST(gp.gastos_plan AS DOUBLE) AS gastos_plan,
+      CAST(COALESCE(ge.gastos_ejec, 0) AS DOUBLE) AS gastos_ejec
+    FROM (
+      SELECT year, SUM(importe) AS ingresos_plan
+      FROM cp.ingresos_plan
+      WHERE entidad = '${entidad}' AND articulo IS NULL AND capitulo NOT IN (8, 9)
+      GROUP BY year
+    ) ip
+    JOIN (
+      SELECT year, SUM(importe) AS gastos_plan
+      FROM cp.gastos_plan
+      WHERE entidad = '${entidad}' AND articulo IS NULL AND capitulo NOT IN (8, 9)
+      GROUP BY year
+    ) gp ON ip.year = gp.year
+    LEFT JOIN (
+      SELECT year, SUM(recaudacion_neta) / 1000.0 AS ingresos_ejec
+      FROM cp.ingresos_ejecucion
+      WHERE entidad = '${entidad}' AND articulo IS NULL AND capitulo NOT IN (8, 9)
+      GROUP BY year
+    ) ie ON ip.year = ie.year
+    LEFT JOIN (
+      SELECT year, SUM(obligaciones_reconocidas) / 1000.0 AS gastos_ejec
+      FROM cp.gastos_ejecucion
+      WHERE entidad = '${entidad}' AND capitulo NOT IN (8, 9)
+      GROUP BY year
+    ) ge ON ip.year = ge.year
+    ORDER BY ip.year
+  `)
+}

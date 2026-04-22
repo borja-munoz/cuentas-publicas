@@ -163,7 +163,7 @@ export default function Inicio() {
           { label: 'AAPP', desc: 'Ingresos y gastos consolidados (SEC2010)', links: [{ to: '/aapp/ingresos', text: 'Ingresos' }, { to: '/aapp/gastos', text: 'Gastos' }] },
           { label: 'Estado', desc: 'Presupuesto del Estado · Plan y ejecución', links: [{ to: '/estado/ingresos', text: 'Ingresos' }, { to: '/estado/gastos', text: 'Gastos' }] },
           { label: 'Seg. Social', desc: 'Cotizaciones, prestaciones y pensiones', links: [{ to: '/ss/ingresos', text: 'Ingresos' }, { to: '/ss/gastos', text: 'Gastos' }] },
-          { label: 'CCAA', desc: 'Comunidades Autónomas · presupuesto regional', links: [{ to: '/ccaa', text: 'Comunidades' }, { to: '/ccaa/transferencias', text: 'Ingresos' }] },
+          { label: 'CCAA', desc: 'Comunidades Autónomas · presupuesto regional', links: [{ to: '/ccaa', text: 'Resumen' }, { to: '/ccaa/ingresos', text: 'Ingresos' }, { to: '/ccaa/gastos', text: 'Gastos' }] },
         ].map((card) => (
           <div key={card.label} className="border border-[var(--color-rule)] bg-white p-4">
             <p className="text-xs font-semibold uppercase tracking-wider text-[var(--color-ink-faint)] mb-1">{card.label}</p>

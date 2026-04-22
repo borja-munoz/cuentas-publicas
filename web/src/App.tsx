@@ -8,14 +8,22 @@ import { useFilters } from './store/filters'
 import Inicio from './pages/Inicio'
 import AappIngresos from './pages/AAPP/Ingresos'
 import AappGastos from './pages/AAPP/Gastos'
-import Ingresos from './pages/Ingresos'
-import Impuestos from './pages/Ingresos/Impuestos'
-import IvaTipos from './pages/Ingresos/IvaTipos'
-import Gastos from './pages/Gastos'
-import GastosFuncion from './pages/Gastos/Funcion'
-import Pensiones from './pages/Gastos/Pensiones'
-import Transferencias from './pages/Transferencias'
-import CCAA from './pages/CCAA'
+
+import EstadoResumen from './pages/Estado'
+import EstadoIngresos from './pages/Estado/Ingresos'
+import Impuestos from './pages/Estado/Ingresos/Impuestos'
+import IvaTipos from './pages/Estado/Ingresos/IvaTipos'
+import EstadoGastos from './pages/Estado/Gastos'
+import GastosFuncion from './pages/Estado/Gastos/Funcion'
+
+import SSResumen from './pages/SS'
+import SSIngresos from './pages/SS/Ingresos'
+import SSGastos from './pages/SS/Gastos'
+import Pensiones from './pages/SS/Gastos/Pensiones'
+
+import CcaaResumen from './pages/CCAA'
+import CcaaIngresos from './pages/CCAA/Ingresos'
+import CcaaGastos from './pages/CCAA/Gastos'
 import CcaaDetalle from './pages/CCAA/Detalle'
 
 function DBInitializer({ onReady }: { onReady: () => void }) {
@@ -72,20 +80,23 @@ export default function App() {
             <Route path="aapp/gastos" element={<AappGastos />} />
 
             {/* Estado */}
-            <Route path="estado/ingresos" element={<Ingresos entity="Estado" />} />
+            <Route path="estado" element={<EstadoResumen />} />
+            <Route path="estado/ingresos" element={<EstadoIngresos />} />
             <Route path="estado/ingresos/impuestos" element={<Impuestos />} />
             <Route path="estado/ingresos/impuestos/iva" element={<IvaTipos />} />
-            <Route path="estado/gastos" element={<Gastos entity="Estado" />} />
+            <Route path="estado/gastos" element={<EstadoGastos />} />
             <Route path="estado/gastos/funcion" element={<GastosFuncion />} />
 
             {/* Seguridad Social */}
-            <Route path="ss/ingresos" element={<Ingresos entity="SS" />} />
-            <Route path="ss/gastos" element={<Gastos entity="SS" />} />
+            <Route path="ss" element={<SSResumen />} />
+            <Route path="ss/ingresos" element={<SSIngresos />} />
+            <Route path="ss/gastos" element={<SSGastos />} />
             <Route path="ss/gastos/pensiones" element={<Pensiones />} />
 
             {/* CCAA */}
-            <Route path="ccaa" element={<CCAA />} />
-            <Route path="ccaa/transferencias" element={<Transferencias />} />
+            <Route path="ccaa" element={<CcaaResumen />} />
+            <Route path="ccaa/ingresos" element={<CcaaIngresos />} />
+            <Route path="ccaa/gastos" element={<CcaaGastos />} />
             <Route path="ccaa/:cod" element={<CcaaDetalle />} />
 
             {/* Redirects desde rutas antiguas */}
@@ -96,7 +107,8 @@ export default function App() {
             <Route path="gastos/funcion" element={<Navigate to="/estado/gastos/funcion" replace />} />
             <Route path="gastos/pensiones" element={<Navigate to="/ss/gastos/pensiones" replace />} />
             <Route path="comparativa" element={<Navigate to="/estado/gastos" replace />} />
-            <Route path="transferencias" element={<Navigate to="/ccaa/transferencias" replace />} />
+            <Route path="transferencias" element={<Navigate to="/ccaa/ingresos" replace />} />
+            <Route path="ccaa/transferencias" element={<Navigate to="/ccaa/ingresos" replace />} />
           </Route>
         </Routes>
       </BrowserRouter>

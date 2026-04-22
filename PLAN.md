@@ -13,7 +13,8 @@
 | 7 | Rediseño visual (paleta editorial + cabecera sticky) | ✅ Completo |
 | 8 | Reorganización por ámbito (Estado / CCAA / SS; rutas + Comparativa integrada) | ✅ Completo (M8.3 AAPP diferido a F9) |
 | 9 | Datos consolidados AAPP (IGAE SEC2010 + PIB) | ✅ Completo |
-| 10 | Sección Deuda (stock, intereses, emisiones, tenedores) | ⏳ Pendiente |
+| 10 | Navegación jerárquica + páginas resumen por entidad | ✅ Completo |
+| 11 | Sección Deuda (stock, intereses, emisiones, tenedores) | ⏳ Pendiente |
 
 > **Protocolo por fase** — cada fase abre con un milestone de **diseño en ARCHITECTURE.md** y cierra con un milestone de **verificación + cierre** (repasar entregables, actualizar ARCHITECTURE.md si hubo desviaciones, marcar la fase ✅). Ver `CLAUDE.md` → *Workflow por fase*.
 
@@ -635,18 +636,87 @@ Fase 4 (despliegue) ──► necesario antes de publicar Fase 6
 
 ---
 
-## Fase 10: Sección Deuda ⏳
+## Fase 10: Navegación jerárquica + páginas resumen por entidad ✅
+
+**Objetivo:** Resolver tres problemas de consistencia en el menú lateral y añadir páginas de resumen por entidad (Estado, SS, CCAA) análogas a la página de Inicio de AAPP. Reorganizar los ficheros de páginas para que reflejen la estructura de rutas.
+
+### Milestone 10.1 — Menú lateral (`AppShell.tsx`) ✅
+
+- [x] Nuevo tipo `NavItem`: grupos con `to?` opcional (encabezado clicable) y enlaces con `level?: 1 | 2` (reemplaza `indent?: boolean`).
+- [x] Encabezados Estado, Seguridad Social y CCAA pasan a ser `NavLink` que apuntan a sus páginas de resumen (`/estado`, `/ss`, `/ccaa`).
+- [x] Jerarquía visual correcta: Ingresos → Impuestos AEAT (level 1) → IVA por tipo (level 2).
+- [x] Tamaño de fuente de los grupos: `text-xs` uniforme (antes `text-[0.65rem]`).
+- [x] CCAA: Ingresos → `/ccaa/ingresos`; Gastos → `/ccaa/gastos` (antes "Comunidades" y "Ingresos" con rutas incoherentes).
+
+### Milestone 10.2 — Reorganización de ficheros ✅
+
+Nueva estructura de directorios bajo `pages/`:
+
+```
+Estado/
+  index.tsx              ← NUEVO (resumen)
+  Ingresos/
+    index.tsx            ← MOVIDO; entity='Estado' hardcodeado
+    Impuestos.tsx        ← MOVIDO
+    IvaTipos.tsx         ← MOVIDO
+  Gastos/
+    index.tsx            ← MOVIDO; entity='Estado' hardcodeado
+    Funcion.tsx          ← MOVIDO
+SS/
+  index.tsx              ← NUEVO (resumen)
+  Ingresos.tsx           ← NUEVO; entity='SS' hardcodeado
+  Gastos/
+    index.tsx            ← NUEVO; entity='SS' hardcodeado (sin treemap/política)
+    Pensiones.tsx        ← MOVIDO
+CCAA/
+  index.tsx              ← REEMPLAZADO (resumen con LineChart histórico + tabla)
+  Ingresos.tsx           ← MOVIDO de Transferencias/index.tsx
+  Gastos.tsx             ← MOVIDO de CCAA/index.tsx anterior (mapa coroplético)
+  Detalle.tsx            ← sin cambios
+```
+
+- [x] Las páginas de Ingresos y Gastos por entidad dejan de recibir `entity` como prop; cada fichero hardcodea `const entity = 'Estado'` o `const entity = 'SS'` como constante de módulo.
+- [x] SS/Gastos/index.tsx omite la vista "Por política" (treemap) que es exclusiva del Estado.
+- [x] CCAA/Gastos.tsx actualiza el título a "Gastos CCAA".
+
+### Milestone 10.3 — Nuevas queries ✅
+
+- [x] `getResumenAnualCompleto(entidad)` en `ingresos.ts`: devuelve `{ year, ingresos_plan, ingresos_ejec, gastos_plan, gastos_ejec }` para todas las entidades con datos en SEPG/IGAE. Usado por Estado/index.tsx y SS/index.tsx.
+- [x] `getCcaaResumenHistorico()` en `ccaa.ts`: agrega `v_ccaa_resumen` por año para obtener totales históricos del conjunto de CCAA. Usado por CCAA/index.tsx.
+
+### Milestone 10.4 — Páginas de resumen por entidad ✅
+
+- [x] `Estado/index.tsx` (ruta `/estado`): KPIs (ingresos/gastos/saldo), LineChart histórico plan, tabla resumen últimos 10 años con ejec., tarjetas de navegación a subpáginas.
+- [x] `SS/index.tsx` (ruta `/ss`): idéntico patrón con textos de contexto SS (cotizaciones, prestaciones).
+- [x] `CCAA/index.tsx` (ruta `/ccaa`): KPIs, LineChart histórico usando `getCcaaResumenHistorico`, tabla con todas las CCAA y saldo por año, tarjetas de navegación.
+
+### Milestone 10.5 — App.tsx y Inicio ✅
+
+- [x] `App.tsx`: nuevas rutas `/estado`, `/ss`; rutas `/ccaa/ingresos` y `/ccaa/gastos`; redirect `ccaa/transferencias → ccaa/ingresos`. Todos los imports actualizados a nuevas rutas de ficheros.
+- [x] `Inicio/index.tsx`: scope card de CCAA actualizada con enlaces a `/ccaa` (Resumen), `/ccaa/ingresos` y `/ccaa/gastos`.
+
+### Milestone 10.6 — Cierre ✅
+
+- [x] `pnpm build` sin errores TypeScript.
+- [x] Todas las rutas nuevas (`/estado`, `/ss`, `/ccaa/gastos`, `/ccaa/ingresos`) responden con sus páginas.
+- [x] Redirect `/ccaa/transferencias → /ccaa/ingresos` funciona.
+- [x] Jerarquía visual del menú: grupos en `text-xs`; subniveles sangrados correctamente.
+- [ ] **Pendiente limpieza:** Directorios `pages/Ingresos/`, `pages/Gastos/`, `pages/Transferencias/` ya no son importados por `App.tsx` y pueden borrarse.
+
+---
+
+## Fase 11: Sección Deuda ⏳
 
 **Objetivo:** Añadir la tercera pata de las cuentas públicas: evolución del stock de deuda, ratio/PIB, intereses, emisiones brutas/netas del Tesoro y desglose por tenedores.
 
-### Milestone 10.0 — Actualizar ARCHITECTURE.md ⏳
+### Milestone 11.0 — Actualizar ARCHITECTURE.md ⏳
 
 - [ ] Actualizar en `ARCHITECTURE.md` las secciones afectadas:
   - Esquema DuckDB: añadir tablas `deuda_pde`, `deuda_emisiones`, `deuda_tenedores`.
   - Tabla "Fuentes de Datos": añadir Eurostat `gov_10dd_edpt1`, BdE SPAM, BdE Tenedores, Tesoro emisiones.
   - Árbol de ficheros: añadir `scrapers/deuda.py`, `queries/deuda.ts`, `pages/*/Deuda.tsx`.
 
-### Milestone 10.1 — Scraper y tablas ⏳
+### Milestone 11.1 — Scraper y tablas ⏳
 
 - [ ] Fuentes:
   - **Stock deuda PDE**: Eurostat `gov_10dd_edpt1` (anual, por subsector). Complemento: BdE Síntesis SPAM para serie trimestral.
@@ -681,7 +751,7 @@ Fase 4 (despliegue) ──► necesario antes de publicar Fase 6
   );
   ```
 
-### Milestone 10.2 — Páginas Deuda por ámbito ⏳
+### Milestone 11.2 — Páginas Deuda por ámbito ⏳
 
 - [ ] `web/src/pages/AAPP/Deuda.tsx`: evolución stock (1995–actual), ratio/PIB, área apilada por subsector, intereses (% PIB), tenedores (donut + evolución temporal).
 - [ ] `web/src/pages/Estado/Deuda.tsx`: deuda `S1311` + emisiones brutas/netas del Tesoro + vida media + KPI "cuánto vence este año".
@@ -690,14 +760,14 @@ Fase 4 (despliegue) ──► necesario antes de publicar Fase 6
 - [ ] `web/src/db/queries/deuda.ts`: queries correspondientes.
 - [ ] InsightsPanel: ratio actual vs máximo histórico, carga de intereses vs gasto en educación, etc.
 
-### Milestone 10.3 — Cierre de fase ⏳
+### Milestone 11.3 — Cierre de fase ⏳
 
-- [ ] Repasar los `[ ]` de 10.0–10.2; todos marcados.
+- [ ] Repasar los `[ ]` de 11.0–11.2; todos marcados.
 - [ ] Verificar en DuckDB que `deuda_pde`, `deuda_emisiones`, `deuda_tenedores` tienen filas esperadas.
 - [ ] Ratio deuda/PIB del último año disponible cuadra con cifras oficiales (BdE/Eurostat).
 - [ ] Las 4 páginas (`/aapp/deuda`, `/estado/deuda`, `/ccaa/deuda`, `/ss/deuda`) cargan con datos reales.
 - [ ] Si hubo desviaciones del diseño, actualizar `ARCHITECTURE.md`.
-- [ ] Marcar Fase 10 como ✅ en el resumen de fases y en la cabecera.
+- [ ] Marcar Fase 11 como ✅ en el resumen de fases y en la cabecera.
 
 ---
 
