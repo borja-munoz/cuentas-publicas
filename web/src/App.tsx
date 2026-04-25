@@ -6,6 +6,7 @@ import { query } from './db/client'
 import { useFilters } from './store/filters'
 
 import Inicio from './pages/Inicio'
+import AappResumen from './pages/AAPP'
 import AappIngresos from './pages/AAPP/Ingresos'
 import AappGastos from './pages/AAPP/Gastos'
 import AappDeuda from './pages/AAPP/Deuda'
@@ -80,6 +81,7 @@ export default function App() {
             <Route index element={<Inicio />} />
 
             {/* AAPP Global */}
+            <Route path="aapp" element={<AappResumen />} />
             <Route path="aapp/ingresos" element={<AappIngresos />} />
             <Route path="aapp/gastos" element={<AappGastos />} />
             <Route path="aapp/deuda" element={<AappDeuda />} />

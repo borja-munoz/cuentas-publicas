@@ -9,7 +9,7 @@ type NavItem =
 const NAV: NavItem[] = [
   { kind: 'link', to: '/', label: 'Inicio', end: true },
 
-  { kind: 'group', label: 'AAPP' },
+  { kind: 'group', label: 'AAPP', to: '/aapp' },
   { kind: 'link', to: '/aapp/ingresos', label: 'Ingresos' },
   { kind: 'link', to: '/aapp/gastos', label: 'Gastos' },
   { kind: 'link', to: '/aapp/deuda', label: 'Deuda' },
@@ -35,13 +35,13 @@ const NAV: NavItem[] = [
 ]
 
 const GROUP_LABEL_CLASS =
-  'mt-3 mb-1 px-3 text-xs font-semibold uppercase tracking-widest text-[var(--color-ink-faint)]'
+  'mt-5 mb-1 px-3 text-xs font-bold uppercase tracking-widest text-[var(--color-ink)]'
 
 const GROUP_LINK_BASE =
-  'mt-3 mb-1 flex items-center px-3 text-xs font-semibold uppercase tracking-widest transition-colors'
+  'mt-5 mb-1 flex items-center px-3 text-xs font-bold uppercase tracking-widest transition-colors'
 
 const GROUP_LINK_ACTIVE = 'text-[var(--color-accent)]'
-const GROUP_LINK_INACTIVE = 'text-[var(--color-ink-faint)] hover:text-[var(--color-ink)]'
+const GROUP_LINK_INACTIVE = 'text-[var(--color-ink)] hover:text-[var(--color-accent)]'
 
 export default function AppShell() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
