@@ -90,7 +90,7 @@ cuentas-publicas/
 │       │       ├── gastos_politica.ts   # Queries políticas de gasto PGE consolidado
 │       │       ├── iva_tipos.ts         # Queries IVA por tipo impositivo
 │       │       ├── pensiones.ts         # Queries pensiones contributivas SS
-│       │       └── deuda.ts            # Queries deuda PDE por subsector (getDeudaHistorica, getDeudaAnual)
+│       │       └── deuda.ts            # Queries deuda: stock PDE, instrumento, vencimiento, tenedores
 │       ├── store/
 │       │   └── filters.ts               # Zustand: selectedYear, viewMode, pageFilters (sin entityType)
 │       ├── components/
@@ -170,10 +170,12 @@ cuentas-publicas/
 | Cuentas AAPP SEC2010 | Eurostat `gov_10a_main` | JSON-stat REST API | 1995–actual | 5 subsectores, ~9 conceptos ingresos + ~9 gastos |
 | PIB a precios corrientes | Eurostat `nama_10_gdp` | JSON-stat REST API | 1975–actual | Nacional, M€ corrientes |
 | Deuda PDE (stock) | Eurostat `gov_10dd_edpt1` | JSON-stat REST API | 1995–actual | 5 subsectores (S13/S1311/S1312/S1313/S1314), M€ |
+| Deuda por instrumento, vencimiento y tenedor | Eurostat `gov_10dd_ggd` | JSON-stat REST API | 2000–actual | 5 subsectores × na_item × maturity × sector2 (acreedor) |
 
 - **AAPP SEC2010 (Eurostat gov_10a_main)**: misma API REST que `gov_10a_exp`. 5 peticiones (una por sector). Items de ingresos (TR, D2REC, D5REC, D61REC, D4REC, D7REC, D9REC) y gastos (TE, D1PAY, P2, D3PAY, D41PAY, D62PAY, D7PAY, D9PAY, P51G, B9) en la misma llamada por sector. Mapeo NA_ITEM → concepto canónico en `eurostat_aapp.py`. Cobertura ~1995–actual (último año publicado suele retrasarse 6–12 meses). Pausa 0,5s entre peticiones.
 - **PIB (Eurostat nama_10_gdp)**: `na_item=B1GQ&unit=CP_MEUR&geo=ES`. Una sola petición. Cobertura 1975–actual.
 - **Deuda PDE (Eurostat gov_10dd_edpt1)**: `na_item=GD&unit=MIO_EUR&geo=ES`. 5 peticiones (una por sector). Indicador Maastricht — deuda bruta consolidada del sector en M€. Cobertura ~1995–actual (retraso habitual 6–12 meses). Pausa 0,5s entre peticiones.
+- **Deuda por instrumento/vencimiento/tenedor (Eurostat gov_10dd_ggd)**: mismo formato JSON-stat. 3 peticiones (una por dimensión: instrumento, vencimiento, tenedor), sin filtro de sector para obtener los 5 subsectores en una sola llamada. Dimensiones clave: `na_item` (instrumento), `maturity` (plazo), `sector2` (acreedor). Cobertura 2000–actual. Pausa 0,5s.
 
 **Notas de descarga:**
 - **AEAT**: ficheros IART por año (2017–2024); histórico 1995–2016 en hoja "1.6" del último IART. User-Agent estándar.
@@ -375,6 +377,41 @@ CREATE TABLE deuda_pde (
     subsector VARCHAR NOT NULL,
     importe   DECIMAL(18,2),           -- M€ a precios corrientes
     PRIMARY KEY (year, subsector)
+);
+
+-- Deuda PDE por instrumento financiero (Eurostat gov_10dd_ggd)
+-- instrumento: GD_F3 Letras/Valores c.p., GD_F4 Bonos/Obligaciones l.p., F4 Préstamos, GD_F2 Depósitos
+-- sector2=S1_S2 (todos los acreedores), maturity=TOTAL  |  cobertura 2000–actual
+CREATE TABLE deuda_instrumento (
+    year            INTEGER NOT NULL,
+    subsector       VARCHAR NOT NULL,
+    instrumento     VARCHAR NOT NULL,
+    instrumento_nom VARCHAR NOT NULL,
+    importe         DECIMAL(18,2),
+    PRIMARY KEY (year, subsector, instrumento)
+);
+
+-- Deuda PDE por plazo de vencimiento (Eurostat gov_10dd_ggd, na_item=GD)
+-- vencimiento: Y_LE1 ≤1 año, Y1-5 1-5a, Y5-10 5-10a, Y10-30 10-30a, Y_GT30 >30a
+-- sector2=S1_S2 (todos los acreedores)  |  cobertura 2000–actual
+CREATE TABLE deuda_vencimiento (
+    year            INTEGER NOT NULL,
+    subsector       VARCHAR NOT NULL,
+    vencimiento     VARCHAR NOT NULL,
+    vencimiento_nom VARCHAR NOT NULL,
+    importe         DECIMAL(18,2),
+    PRIMARY KEY (year, subsector, vencimiento)
+);
+
+-- Deuda PDE por sector acreedor/tenedor (Eurostat gov_10dd_ggd, na_item=GD, maturity=TOTAL)
+-- tenedor: S121 BCE/BdE, S122_S123 Otros bancos, S1 Residentes total, S2 No residentes, S14_S15 Hogares
+CREATE TABLE deuda_tenedores (
+    year        INTEGER NOT NULL,
+    subsector   VARCHAR NOT NULL,
+    tenedor     VARCHAR NOT NULL,
+    tenedor_nom VARCHAR NOT NULL,
+    importe     DECIMAL(18,2),
+    PRIMARY KEY (year, subsector, tenedor)
 );
 ```
 

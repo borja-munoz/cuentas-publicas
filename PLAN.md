@@ -15,6 +15,7 @@
 | 9 | Datos consolidados AAPP (IGAE SEC2010 + PIB) | ✅ Completo |
 | 10 | Navegación jerárquica + páginas resumen por entidad | ✅ Completo |
 | 11 | Sección Deuda (stock PDE por subsector + ratio PIB, 4 páginas) | ✅ Completo (emisiones/tenedores diferidos) |
+| 12 | Deuda ampliada: instrumentos, vencimientos, tenedores (Eurostat gov_10dd_ggd) + comparativa PIB | ✅ Completo |
 
 > **Protocolo por fase** — cada fase abre con un milestone de **diseño en ARCHITECTURE.md** y cierra con un milestone de **verificación + cierre** (repasar entregables, actualizar ARCHITECTURE.md si hubo desviaciones, marcar la fase ✅). Ver `CLAUDE.md` → *Workflow por fase*.
 
@@ -754,3 +755,35 @@ CCAA/
 | 2013 en SEPG | Datos en columna anotada `"2013 (*)"` de ficheros 2014+; capturado con `_YEAR_ANNOTATED_RE` |
 | Años prorrogados | `ingresos_plan` es idéntico para 2023, 2024-P y 2025-P (presupuesto extendido) |
 | AEAT vs Estado | AEAT recauda para todas las AAPP; Estado retiene ~50% tras distribución territorial a CCAA |
+
+---
+
+## Fase 12: Deuda Ampliada ⏳
+
+**Objetivo:** Enriquecer las páginas de deuda con tres dimensiones nuevas obtenidas de Eurostat `gov_10dd_ggd`: distribución por instrumento financiero, por plazo de vencimiento y por sector acreedor (tenedores). Añadir comparativa deuda/PIB con valores absolutos.
+
+### Milestone 12.0 — Actualizar ARCHITECTURE.md ✅
+
+- [x] Tablas nuevas: `deuda_instrumento`, `deuda_vencimiento`, `deuda_tenedores`.
+- [x] Fuente añadida: Eurostat `gov_10dd_ggd`.
+- [x] Notas de descarga actualizadas.
+
+### Milestone 12.1 — Scraper y tablas ⏳
+
+- [ ] Tablas `deuda_instrumento`, `deuda_vencimiento`, `deuda_tenedores` añadidas al DDL en `db.py`.
+- [ ] `deuda.py` extendido con 3 funciones: `_fetch_instrumento()`, `_fetch_vencimiento()`, `_fetch_tenedores()` usando `gov_10dd_ggd`.
+- [ ] Mapeos de códigos Eurostat a etiquetas canónicas en español.
+
+### Milestone 12.2 — Frontend ⏳
+
+- [ ] `deuda.ts`: `getDeudaInstrumento(subsector, year?)`, `getDeudaVencimiento(subsector, year?)`, `getDeudaTenedores(subsector, year?)`.
+- [ ] `AAPP/Deuda.tsx`: sección instrumentos (BarChart apilado), sección vencimientos (BarChart), sección tenedores (BarChart), gráfico deuda+PIB comparativo.
+- [ ] `Estado/Deuda.tsx`, `SS/Deuda.tsx`, `CCAA/Deuda.tsx`: mismas secciones (tenedores + vencimientos + comparativa PIB).
+
+### Milestone 12.3 — Cierre ⏳
+
+- [ ] Scraper ejecutado; tablas con filas esperadas.
+- [ ] Build TypeScript sin errores.
+- [ ] Páginas cargan con datos reales.
+- [ ] ARCHITECTURE.md al día.
+- [ ] Marcar Fase 12 ✅.

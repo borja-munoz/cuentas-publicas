@@ -4,12 +4,27 @@ import ContextBox from '../../components/ui/ContextBox'
 import KpiCard from '../../components/ui/KpiCard'
 import InsightsPanel from '../../components/ui/InsightsPanel'
 import LineChart from '../../components/charts/LineChart'
+import BarChart from '../../components/charts/BarChart'
 import { ChartSkeleton } from '../../components/ui/LoadingSkeleton'
 import { useFilters } from '../../store/filters'
 import { formatEur } from '../../utils/format'
 import type { Insight } from '../../utils/insights'
 import { getPibAnual, type PibAnual } from '../../db/queries/aapp'
-import { getDeudaHistorica, getDeudaAnual, getDeudaYears, type DeudaRow, type DeudaSubsectorRow } from '../../db/queries/deuda'
+import {
+  getDeudaHistorica,
+  getDeudaAnual,
+  getDeudaYears,
+  getDeudaInstrumentoHistorico,
+  getDeudaVencimientoHistorico,
+  getDeudaTenedoresHistorico,
+  INSTRUMENTO_COLORS,
+  VENCIMIENTO_COLORS,
+  VENCIMIENTO_ORDER,
+  TENEDOR_COLORS,
+  type DeudaRow,
+  type DeudaSubsectorRow,
+  type DeudaDetalleRow,
+} from '../../db/queries/deuda'
 
 const SUBSECTOR_LABELS: Record<string, string> = {
   S13:   'AAPP (total)',
@@ -28,6 +43,30 @@ const SUBSECTOR_COLORS: Record<string, string> = {
 
 const SUBSECTORES_DETALLE = ['S1311', 'S1312', 'S1313', 'S1314'] as const
 
+/** Pivota filas (year, codigo, nombre, importe) en series para LineChart/BarChart */
+function toSeries(
+  rows: DeudaDetalleRow[],
+  years: string[],
+  order: string[],
+  colors: Record<string, string>,
+) {
+  const byCode = new Map<string, { name: string; data: (number | null)[] }>()
+  const yearIdx = Object.fromEntries(years.map((y, i) => [y, i]))
+
+  for (const row of rows) {
+    if (!order.includes(row.codigo)) continue
+    if (!byCode.has(row.codigo)) {
+      byCode.set(row.codigo, { name: row.nombre, data: Array(years.length).fill(null) })
+    }
+    const i = yearIdx[String(row.year)]
+    if (i !== undefined) byCode.get(row.codigo)!.data[i] = row.importe
+  }
+
+  return order
+    .filter((c) => byCode.has(c))
+    .map((c) => ({ name: byCode.get(c)!.name, data: byCode.get(c)!.data as number[], color: colors[c] }))
+}
+
 export default function AappDeuda() {
   const { selectedYear, setPageFilters } = useFilters()
   const [availableYears, setAvailableYears] = useState<number[]>([])
@@ -35,6 +74,9 @@ export default function AappDeuda() {
   const [historicaSubsectores, setHistoricaSubsectores] = useState<Record<string, DeudaRow[]>>({})
   const [deudaAnual, setDeudaAnual] = useState<DeudaSubsectorRow[]>([])
   const [pib, setPib] = useState<PibAnual[]>([])
+  const [instrumento, setInstrumento] = useState<DeudaDetalleRow[]>([])
+  const [vencimiento, setVencimiento] = useState<DeudaDetalleRow[]>([])
+  const [tenedores, setTenedores] = useState<DeudaDetalleRow[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -59,14 +101,24 @@ export default function AappDeuda() {
       getDeudaHistorica('S13'),
       ...SUBSECTORES_DETALLE.map((s) => getDeudaHistorica(s)),
       getPibAnual(),
+      getDeudaInstrumentoHistorico('S13'),
+      getDeudaVencimientoHistorico('S13'),
+      getDeudaTenedoresHistorico('S13'),
     ]).then(([hist, ...rest]) => {
       const subsectorData = rest.slice(0, SUBSECTORES_DETALLE.length) as DeudaRow[][]
-      const pibData = rest[SUBSECTORES_DETALLE.length] as PibAnual[]
+      const pibData        = rest[SUBSECTORES_DETALLE.length] as PibAnual[]
+      const instData       = rest[SUBSECTORES_DETALLE.length + 1] as DeudaDetalleRow[]
+      const vencData       = rest[SUBSECTORES_DETALLE.length + 2] as DeudaDetalleRow[]
+      const tenData        = rest[SUBSECTORES_DETALLE.length + 3] as DeudaDetalleRow[]
+
       setHistorica(hist as DeudaRow[])
       const bySubsector: Record<string, DeudaRow[]> = {}
       SUBSECTORES_DETALLE.forEach((s, i) => { bySubsector[s] = subsectorData[i] })
       setHistoricaSubsectores(bySubsector)
       setPib(pibData)
+      setInstrumento(instData)
+      setVencimiento(vencData)
+      setTenedores(tenData)
     }).catch(console.error)
       .finally(() => setLoading(false))
   }, [])
@@ -84,30 +136,63 @@ export default function AappDeuda() {
   const yoyDeuda = prevTotal && currTotal && prevTotal.importe > 0
     ? (currTotal.importe - prevTotal.importe) / prevTotal.importe
     : null
+  const deudaEstado = deudaAnual.find((r) => r.subsector === 'S1311')?.importe ?? null
 
-  const deudaAnualRow = deudaAnual.find((r) => r.subsector === 'S1311')
-  const deudaEstado = deudaAnualRow?.importe ?? null
+  // Años disponibles en los datos históricos (deuda + PIB desde 1995)
+  const yearsDeuda = historica.map((r) => String(r.year))
 
-  const years = historica.map((r) => String(r.year))
+  // Años disponibles en ggd (desde 2000)
+  const yearsGgd = useMemo(() => {
+    const s = new Set(instrumento.map((r) => String(r.year)))
+    return Array.from(s).sort()
+  }, [instrumento])
+
+  const INSTRUMENTO_ORDER = ['GD_F4', 'GD_F3', 'F4', 'GD_F2']
+  const TENEDOR_ORDER = ['S2', 'S121', 'S122_S123', 'S14_S15']
+
+  const seriesInstrumento = useMemo(
+    () => toSeries(instrumento, yearsGgd, INSTRUMENTO_ORDER, INSTRUMENTO_COLORS),
+    [instrumento, yearsGgd],
+  )
+  const seriesVencimiento = useMemo(
+    () => toSeries(vencimiento, yearsGgd, VENCIMIENTO_ORDER, VENCIMIENTO_COLORS),
+    [vencimiento, yearsGgd],
+  )
+  const seriesTenedores = useMemo(
+    () => toSeries(tenedores, yearsGgd, TENEDOR_ORDER, TENEDOR_COLORS),
+    [tenedores, yearsGgd],
+  )
+
+  // Serie deuda + PIB para comparativa
+  const seriesDeudaPib = useMemo(() => {
+    const deudaByYear = Object.fromEntries(historica.map((r) => [r.year, r.importe]))
+    const pibByYear   = Object.fromEntries(pib.map((r) => [r.year, r.pib]))
+    const years = historica.map((r) => r.year).filter((y) => pibByYear[y] != null)
+    return {
+      years: years.map(String),
+      deuda: years.map((y) => deudaByYear[y] ?? null),
+      pib:   years.map((y) => pibByYear[y] ?? null),
+    }
+  }, [historica, pib])
 
   const insights: Insight[] = loading || !currTotal ? [] : [
     ...(deudaPib != null ? [{
       label: 'Deuda AAPP / PIB',
-      value: `${deudaPib.toLocaleString('es-ES', { maximumFractionDigits: 1 })}%`,
+      value: `${deudaPib.toFixed(1)}%`,
       trend: deudaPib > 100 ? 'down' as const : deudaPib > 60 ? 'neutral' as const : 'up' as const,
-      description: `La deuda bruta de las Administraciones Públicas equivale al ${deudaPib.toFixed(1)}% del PIB en ${effectiveYear}, según el criterio Maastricht (Procedimiento de Déficit Excesivo, PDE). El límite del Pacto de Estabilidad y Crecimiento es el 60% del PIB.`,
+      description: `La deuda bruta de las AAPP equivale al ${deudaPib.toFixed(1)}% del PIB en ${effectiveYear}. El límite del Pacto de Estabilidad y Crecimiento es el 60% del PIB.`,
     }] : []),
     ...(deudaEstado != null && currTotal ? [{
       label: 'Peso deuda Estado',
       value: `${((deudaEstado / currTotal.importe) * 100).toFixed(1)}%`,
       trend: 'neutral' as const,
-      description: `El Estado (Administración Central) concentra el ${((deudaEstado / currTotal.importe) * 100).toFixed(1)}% de la deuda total de las AAPP. El resto se distribuye entre CCAA, Corporaciones Locales y Seguridad Social.`,
+      description: `El Estado (Administración Central) concentra el ${((deudaEstado / currTotal.importe) * 100).toFixed(1)}% de la deuda total de las AAPP.`,
     }] : []),
     ...(yoyDeuda != null ? [{
       label: 'Variación interanual',
       value: `${yoyDeuda >= 0 ? '+' : ''}${(yoyDeuda * 100).toFixed(1)}%`,
       trend: yoyDeuda <= 0 ? 'up' as const : 'down' as const,
-      description: `La deuda de las AAPP ${yoyDeuda >= 0 ? 'creció' : 'redujo'} un ${Math.abs(yoyDeuda * 100).toFixed(1)}% respecto a ${(effectiveYear ?? 0) - 1}, equivalente a ${formatEur(Math.abs(currTotal.importe - (prevTotal?.importe ?? 0)))} de variación.`,
+      description: `La deuda de las AAPP ${yoyDeuda >= 0 ? 'creció' : 'redujo'} un ${Math.abs(yoyDeuda * 100).toFixed(1)}% en ${effectiveYear}, equivalente a ${formatEur(Math.abs(currTotal.importe - (prevTotal?.importe ?? 0)))}.`,
     }] : []),
   ]
 
@@ -121,22 +206,21 @@ export default function AappDeuda() {
       <ContextBox title="Deuda pública en metodología Maastricht (PDE)">
         <p>
           La <strong>deuda del Procedimiento de Déficit Excesivo (PDE)</strong> es el indicador
-          oficial utilizado por la Unión Europea para supervisar la sostenibilidad fiscal de los
-          Estados miembros. Se calcula como el <strong>stock bruto consolidado de pasivos
-          financieros</strong> a valor nominal: incluye bonos del Estado, letras del Tesoro,
-          préstamos y otros instrumentos de deuda, pero excluye los pasivos entre subsectores de
-          las propias AAPP (consolidación interna).
+          oficial de la UE para supervisar la sostenibilidad fiscal. Es la{' '}
+          <strong>deuda bruta consolidada</strong> a valor nominal: incluye bonos, letras,
+          préstamos e instrumentos similares, pero excluye pasivos entre subsectores de las
+          propias AAPP.
         </p>
         <p>
-          Los datos provienen de Eurostat (dataset <strong>gov_10dd_edpt1</strong>) y cubren
-          desde 1995. El límite del <em>Pacto de Estabilidad y Crecimiento</em> es el{' '}
-          <strong>60% del PIB</strong>. España ha estado por encima de ese umbral desde la crisis
-          financiera de 2010.
+          Los datos provienen de Eurostat (<strong>gov_10dd_edpt1</strong> para el stock total
+          y <strong>gov_10dd_ggd</strong> para el desglose por instrumento, vencimiento y
+          acreedor). El límite del <em>Pacto de Estabilidad</em> es el <strong>60% del PIB</strong>.
         </p>
       </ContextBox>
 
       <InsightsPanel insights={insights} isLoading={loading} />
 
+      {/* KPIs */}
       <div className="grid grid-cols-2 gap-6 sm:grid-cols-3">
         <KpiCard
           title="Deuda AAPP"
@@ -160,55 +244,95 @@ export default function AappDeuda() {
         })}
       </div>
 
-      {/* Histórico deuda total */}
+      {/* Stock total histórico */}
       <div className="border border-[var(--color-rule)] bg-white px-4 pt-4 pb-3">
-        <h2 className="text-sm font-semibold text-[var(--color-ink)] mb-1">
-          Deuda AAPP · 1995–actual
-        </h2>
-        <p className="text-xs text-[var(--color-ink-muted)] mb-3">
-          Millones de euros. Criterio Maastricht (PDE). Deuda bruta consolidada.
-        </p>
-        {loading ? (
-          <ChartSkeleton height={280} />
-        ) : years.length > 0 ? (
+        <h2 className="text-sm font-semibold text-[var(--color-ink)] mb-1">Stock de deuda AAPP · 1995–actual</h2>
+        <p className="text-xs text-[var(--color-ink-muted)] mb-3">Millones de euros. Criterio Maastricht (PDE). Deuda bruta consolidada.</p>
+        {loading ? <ChartSkeleton height={260} /> : (
           <LineChart
-            categories={years}
+            categories={yearsDeuda}
             series={[{ name: 'Deuda AAPP', data: historica.map((r) => r.importe), color: '#B82A2A' }]}
-            height={280}
-            smooth
+            height={260} smooth
           />
-        ) : (
-          <p className="py-8 text-center text-sm text-[var(--color-ink-muted)]">Sin datos.</p>
         )}
+      </div>
+
+      {/* Deuda + PIB comparativa */}
+      <div className="border border-[var(--color-rule)] bg-white px-4 pt-4 pb-3">
+        <h2 className="text-sm font-semibold text-[var(--color-ink)] mb-1">Deuda AAPP vs PIB · 1995–actual</h2>
+        <p className="text-xs text-[var(--color-ink-muted)] mb-3">Millones de euros a precios corrientes. Permite comparar la evolución del stock de deuda con el tamaño de la economía.</p>
+        {loading ? <ChartSkeleton height={260} /> : seriesDeudaPib.years.length > 0 ? (
+          <LineChart
+            categories={seriesDeudaPib.years}
+            series={[
+              { name: 'PIB', data: seriesDeudaPib.pib as number[], color: '#6B7280' },
+              { name: 'Deuda AAPP', data: seriesDeudaPib.deuda as number[], color: '#B82A2A' },
+            ]}
+            height={260} smooth
+          />
+        ) : <p className="py-8 text-center text-sm text-[var(--color-ink-muted)]">Sin datos.</p>}
       </div>
 
       {/* Deuda por subsector */}
       <div className="border border-[var(--color-rule)] bg-white px-4 pt-4 pb-3">
-        <h2 className="text-sm font-semibold text-[var(--color-ink)] mb-1">
-          Deuda por subsector · 1995–actual
-        </h2>
-        <p className="text-xs text-[var(--color-ink-muted)] mb-3">
-          Millones de euros. Deuda de cada subsector (no consolida entre ellos). Estado, CCAA, CCLL y Seg. Social.
-        </p>
-        {loading ? (
-          <ChartSkeleton height={280} />
-        ) : years.length > 0 ? (
+        <h2 className="text-sm font-semibold text-[var(--color-ink)] mb-1">Deuda por subsector · 1995–actual</h2>
+        <p className="text-xs text-[var(--color-ink-muted)] mb-3">Millones de euros por subsector (no consolidado entre ellos).</p>
+        {loading ? <ChartSkeleton height={260} /> : (
           <LineChart
-            categories={years}
+            categories={yearsDeuda}
             series={SUBSECTORES_DETALLE.map((s) => ({
               name: SUBSECTOR_LABELS[s],
               data: historicaSubsectores[s]?.map((r) => r.importe) ?? [],
               color: SUBSECTOR_COLORS[s],
             }))}
-            height={280}
-            smooth
+            height={260} smooth
           />
-        ) : (
-          <p className="py-8 text-center text-sm text-[var(--color-ink-muted)]">Sin datos.</p>
         )}
       </div>
 
-      {/* Tabla resumen año seleccionado */}
+      {/* Por instrumento */}
+      <div className="border border-[var(--color-rule)] bg-white px-4 pt-4 pb-3">
+        <h2 className="text-sm font-semibold text-[var(--color-ink)] mb-1">Deuda por instrumento · 2020–actual</h2>
+        <p className="text-xs text-[var(--color-ink-muted)] mb-3">Millones de euros. Bonos y Obligaciones son la principal fuente de financiación. Letras del Tesoro cubren necesidades a corto plazo. Fuente: Eurostat gov_10dd_ggd.</p>
+        {loading ? <ChartSkeleton height={260} /> : seriesInstrumento.length > 0 ? (
+          <BarChart
+            categories={yearsGgd}
+            series={seriesInstrumento}
+            height={260}
+            stacked
+          />
+        ) : <p className="py-8 text-center text-sm text-[var(--color-ink-muted)]">Sin datos.</p>}
+      </div>
+
+      {/* Por vencimiento */}
+      <div className="border border-[var(--color-rule)] bg-white px-4 pt-4 pb-3">
+        <h2 className="text-sm font-semibold text-[var(--color-ink)] mb-1">Deuda por plazo de vencimiento · 2020–actual</h2>
+        <p className="text-xs text-[var(--color-ink-muted)] mb-3">Millones de euros. La deuda a largo plazo (&gt;5 años) proporciona estabilidad financiera y reduce el riesgo de refinanciación. Fuente: Eurostat gov_10dd_ggd.</p>
+        {loading ? <ChartSkeleton height={260} /> : seriesVencimiento.length > 0 ? (
+          <BarChart
+            categories={yearsGgd}
+            series={seriesVencimiento}
+            height={260}
+            stacked
+          />
+        ) : <p className="py-8 text-center text-sm text-[var(--color-ink-muted)]">Sin datos.</p>}
+      </div>
+
+      {/* Por tenedor */}
+      <div className="border border-[var(--color-rule)] bg-white px-4 pt-4 pb-3">
+        <h2 className="text-sm font-semibold text-[var(--color-ink)] mb-1">Tenedores de deuda AAPP · 2020–actual</h2>
+        <p className="text-xs text-[var(--color-ink-muted)] mb-3">Millones de euros. Muestra quién posee la deuda pública española: no residentes (inversores extranjeros), BCE/BdE (compras QE), bancos nacionales, hogares, etc. Fuente: Eurostat gov_10dd_ggd.</p>
+        {loading ? <ChartSkeleton height={260} /> : seriesTenedores.length > 0 ? (
+          <BarChart
+            categories={yearsGgd}
+            series={seriesTenedores}
+            height={260}
+            stacked
+          />
+        ) : <p className="py-8 text-center text-sm text-[var(--color-ink-muted)]">Sin datos.</p>}
+      </div>
+
+      {/* Tabla subsectores año seleccionado */}
       {!loading && deudaAnual.length > 0 && (
         <div className="border border-[var(--color-rule)] bg-white overflow-x-auto">
           <table className="w-full text-sm">
@@ -220,7 +344,7 @@ export default function AappDeuda() {
               </tr>
             </thead>
             <tbody>
-              {deudaAnual.map((row) => {
+              {deudaAnual.filter((row) => row.subsector !== 'S13').map((row) => {
                 const pct = pibActual ? (row.importe / pibActual) * 100 : null
                 return (
                   <tr key={row.subsector} className="border-b border-[var(--color-rule)] last:border-0">
@@ -236,7 +360,7 @@ export default function AappDeuda() {
       )}
 
       <p className="text-[0.7rem] text-[var(--color-ink-faint)]">
-        Fuente: Eurostat — gov_10dd_edpt1 (Government deficit and debt). Deuda bruta consolidada (criterio Maastricht). Datos en M€.
+        Fuente: Eurostat — gov_10dd_edpt1 (stock PDE) y gov_10dd_ggd (instrumento, vencimiento, tenedores). Deuda bruta consolidada, criterio Maastricht. Datos en M€.
       </p>
     </div>
   )

@@ -233,6 +233,41 @@ CREATE TABLE IF NOT EXISTS deuda_pde (
     importe   DECIMAL(18,2),
     PRIMARY KEY (year, subsector)
 );
+
+-- Deuda PDE por instrumento financiero (Eurostat gov_10dd_ggd)
+-- instrumento: GD_F3 Letras c.p., GD_F4 Bonos/Obligaciones l.p., F4 Préstamos, GD_F2 Depósitos
+-- sector2=S1_S2 (todos acreedores), maturity=TOTAL  |  cobertura 2000–actual  |  M€
+CREATE TABLE IF NOT EXISTS deuda_instrumento (
+    year            INTEGER NOT NULL,
+    subsector       VARCHAR NOT NULL,
+    instrumento     VARCHAR NOT NULL,
+    instrumento_nom VARCHAR NOT NULL,
+    importe         DECIMAL(18,2),
+    PRIMARY KEY (year, subsector, instrumento)
+);
+
+-- Deuda PDE por plazo de vencimiento (Eurostat gov_10dd_ggd, na_item=GD)
+-- vencimiento: Y_LE1 ≤1a, Y1-5 1-5a, Y5-10 5-10a, Y10-30 10-30a, Y_GT30 >30a
+-- sector2=S1_S2 (todos acreedores)  |  cobertura 2000–actual  |  M€
+CREATE TABLE IF NOT EXISTS deuda_vencimiento (
+    year            INTEGER NOT NULL,
+    subsector       VARCHAR NOT NULL,
+    vencimiento     VARCHAR NOT NULL,
+    vencimiento_nom VARCHAR NOT NULL,
+    importe         DECIMAL(18,2),
+    PRIMARY KEY (year, subsector, vencimiento)
+);
+
+-- Deuda PDE por sector acreedor/tenedor (Eurostat gov_10dd_ggd, na_item=GD, maturity=TOTAL)
+-- tenedor: S121 BCE/BdE, S122_S123 Otros bancos, S1 Residentes total, S2 No residentes, S14_S15 Hogares
+CREATE TABLE IF NOT EXISTS deuda_tenedores (
+    year        INTEGER NOT NULL,
+    subsector   VARCHAR NOT NULL,
+    tenedor     VARCHAR NOT NULL,
+    tenedor_nom VARCHAR NOT NULL,
+    importe     DECIMAL(18,2),
+    PRIMARY KEY (year, subsector, tenedor)
+);
 """
 
 _VIEWS = """
